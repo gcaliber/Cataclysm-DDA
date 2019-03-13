@@ -3206,6 +3206,22 @@ void player::on_hit( Creature *source, body_part bp_hit,
     lua_callback( "on_player_hit", lua_callback_args_info );
 }
 
+int player::get_lift_assist() const
+{
+    int result = 0;
+    const std::vector<npc *> helpers = g->u.get_crafting_helpers();
+    for( const npc *np : helpers ) {
+        result += np->get_str();
+    }
+    return result;
+}
+
+int player::get_num_crafting_helpers( int max ) const
+{
+    std::vector<npc *> helpers = g->u.get_crafting_helpers();
+    return std::min( max, static_cast<int>( helpers.size() ) );
+}
+
 void player::on_hurt( Creature *source, bool disturb /*= true*/ )
 {
     if( has_trait( trait_ADRENALINE ) && !has_effect( effect_adrenaline ) &&
@@ -12071,26 +12087,31 @@ std::string player::visible_mutations( const int visibility_cap ) const
     return trait_str;
 }
 
-std::string player::short_description() const
+std::vector<std::string> player::short_description_parts() const
 {
-    std::stringstream ret;
+    std::vector<std::string> result;
 
     if( is_armed() ) {
-        ret << _( "Wielding: " ) << weapon.tname() << ";   ";
+        result.push_back( _( "Wielding: " ) + weapon.tname() );
     }
     const std::string worn_str = enumerate_as_string( worn.begin(), worn.end(),
     []( const item & it ) {
         return it.tname();
     } );
     if( !worn_str.empty() ) {
-        ret << _( "Wearing: " ) << worn_str << ";";
+        result.push_back( _( "Wearing: " ) + worn_str );
     }
     const int visibility_cap = 0; // no cap
     const auto trait_str = visible_mutations( visibility_cap );
     if( !trait_str.empty() ) {
-        ret << _( "   Traits: " ) << trait_str << ";";
+        result.push_back( _( "Traits: " ) + trait_str );
     }
-    return ret.str();
+    return result;
+}
+
+std::string player::short_description() const
+{
+    return join( short_description_parts(), ";   " );
 }
 
 int player::print_info( const catacurses::window &w, int vStart, int, int column ) const
@@ -12341,7 +12362,7 @@ bool player::has_item_with_flag( const std::string &flag, bool need_charges ) co
 {
     return has_item_with( [&flag, &need_charges]( const item & it ) {
         if( it.is_tool() && need_charges ) {
-            return it.has_flag( flag ) && it.type->tool->max_charges ? it.charges > 0 : true;
+            return it.has_flag( flag ) && it.type->tool->max_charges ? it.charges > 0 : it.has_flag( flag );
         }
         return it.has_flag( flag );
     } );
