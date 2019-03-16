@@ -32,13 +32,12 @@ class basecamp
 {
     public:
         basecamp();
-        basecamp( const std::string &name_, const tripoint &pos_ );
-        basecamp( const std::string &name_, const tripoint &bb_pos_, const tripoint &pos_,
-                  std::vector<tripoint> sort_points_, std::vector<std::string> directions_,
-                  std::map<std::string, expansion_data> expansions_ );
+        basecamp( const std::string &name_, const tripoint &omt_pos );
+        basecamp( const std::string &name_, const tripoint &bb_pos_, std::vector<tripoint> sort_points_,
+                  std::vector<std::string> directions_, std::map<std::string, expansion_data> expansions_ );
 
         inline bool is_valid() const {
-            return !name.empty() && pos != tripoint_zero;
+            return !name.empty() && omt_pos != tripoint_zero;
         }
         inline int board_x() const {
             return bb_pos.x;
@@ -46,8 +45,8 @@ class basecamp
         inline int board_y() const {
             return bb_pos.y;
         }
-        tripoint camp_pos() const {
-            return pos;
+        inline tripoint camp_omt_pos() const {
+            return omt_pos;
         }
         inline const std::string &camp_name() const {
             return name;
@@ -55,9 +54,13 @@ class basecamp
         std::string board_name() const;
         std::vector<tripoint> sort_points;
         std::vector<std::string> directions;
-
+        std::string name;
+        //change name of camp
+        void set_name( const std::string &new_name );
+        void query_new_name();
         void add_expansion( const std::string &terrain, const tripoint &new_pos );
         void define_camp( npc &p );
+        bool reset_camp();
 
         std::string expansion_tab( const std::string &dir ) const;
 
@@ -66,7 +69,7 @@ class basecamp
         bool any_has_level( const std::string &type, int min_level ) const;
         bool can_expand() const;
         /// Returns the name of the building the current building @ref dir upgrades into, "null" if there isn't one
-        const std::string next_upgrade( const std::string &dir ) const;
+        const std::string next_upgrade( const std::string &dir, const int offset = 1 ) const;
         /// Improve the camp tile to the next level and pushes the camp manager onto his correct position in case he moved
         bool om_upgrade( const std::string &next_upgrade, const tripoint &upos );
 
@@ -120,6 +123,7 @@ class basecamp
                                const std::vector<item *> &equipment,
                                const std::string &skill_tested, int skill_level );
         void start_upgrade( const std::string &bldg, const std::string &key );
+        std::string om_upgrade_description( const std::string &bldg, bool trunc );
         /// Called when a companion is sent to cut logs
         void start_cut_logs();
         void start_clearcut();
@@ -172,9 +176,8 @@ class basecamp
         void deserialize( JsonIn &jsin );
         void load_data( const std::string &data );
     private:
-        std::string name;
-        // location of the camp in the overmap
-        tripoint pos;
+        // omt pos
+        tripoint omt_pos;
         // location of associated bulletin board
         tripoint bb_pos;
         std::map<std::string, expansion_data> expansions;

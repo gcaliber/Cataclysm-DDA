@@ -97,6 +97,7 @@ struct bcp_miss_data {
     std::string ret_miss_id;
     std::string ret_desc;
 };
+
 // enventually this will move to JSON
 std::map<std::string, bcp_miss_data> basecamp_missions_info = {{
         {
@@ -498,13 +499,6 @@ void talk_function::start_camp( npc &p )
         display = true;
         buffer += _( "There are few fields.  Farming may be difficult.\n" );
     }
-    if( g->allies().size() < 2 ) {
-        if( display ) {
-            buffer += "\n";
-        }
-        buffer += _( "Warning, you need at least two allies to work a faction camp!\n" );
-        display = true;
-    }
     if( display && !query_yn( _( "%s \nAre you sure you wish to continue? " ), buffer ) ) {
         return;
     }
@@ -545,9 +539,11 @@ void talk_function::recover_camp( npc &p )
 
 void talk_function::remove_overseer( npc &p )
 {
-    if( !query_yn( "This is permanent, any companions away on mission will be lost until "
-                   "the camp is recovered! Are you sure?" ) ) {
-        return;
+    basecamp *bcp = g->m.camp_at( p.pos(), 60 );
+    if( bcp ) {
+        if( !bcp->reset_camp() ) {
+            return;
+        }
     }
     size_t suffix = p.name.find( _( ", Camp Manager" ) );
     if( suffix != std::string::npos ) {
@@ -556,13 +552,6 @@ void talk_function::remove_overseer( npc &p )
 
     add_msg( _( "%s has abandoned the camp." ), p.name );
     p.companion_mission_role_id.clear();
-
-    std::set<tripoint>::iterator it;
-    it = g->u.camps.find( p.global_omt_location() );
-    if( it != g->u.camps.end() ) {
-        g->u.camps.erase( it );
-    }
-
     stop_guard( p );
 }
 
@@ -583,11 +572,11 @@ void talk_function::basecamp_mission( npc &p )
 void basecamp::get_available_missions( mission_data &mission_key )
 {
     std::string entry;
-    g->u.camps.insert( pos );
+    g->u.camps.insert( omt_pos );
 
     const std::string camp_ctr = "camp";
     const std::string base_dir = "[B]";
-    std::string bldg = next_upgrade( base_dir );
+    std::string bldg = next_upgrade( base_dir, 1 );
     reset_camp_workers();
 
     if( bldg != "null" ) {
@@ -988,8 +977,8 @@ void basecamp::get_available_missions( mission_data &mission_key )
 
     //This starts all of the expansion missions
     for( const std::string &dir : directions ) {
-        const std::string bldg_exp = next_upgrade( dir );
-        const tripoint omt_trg = pos + talk_function::om_dir_to_offset( dir );
+        const std::string bldg_exp = next_upgrade( dir, 1 );
+        const tripoint omt_trg = omt_pos + talk_function::om_dir_to_offset( dir );
         if( bldg_exp != "null" ) {
             comp_list npc_list = get_mission_workers( "_faction_upgrade_exp_" + dir );
             const bcp_miss_data &miss_info = basecamp_missions_info[ "_faction_upgrade_exp_" ];
@@ -1190,7 +1179,7 @@ bool basecamp::handle_mission( const std::string &miss_id, const std::string &mi
     }
 
     if( miss_id == "Upgrade Camp" ) {
-        start_upgrade( next_upgrade( base_dir ), "_faction_upgrade_camp" );
+        start_upgrade( next_upgrade( base_dir, 1 ), "_faction_upgrade_camp" );
     } else if( miss_id == "Recover Ally from Upgrading" ) {
         upgrade_return( base_dir, "_faction_upgrade_camp" );
     }
@@ -1310,7 +1299,7 @@ bool basecamp::handle_mission( const std::string &miss_id, const std::string &mi
         if( dir == miss_dir ) {
             const tripoint omt_trg = expansions[ dir ].pos;
             if( miss_id == miss_dir + " Expansion Upgrade" ) {
-                start_upgrade( next_upgrade( miss_dir ), "_faction_upgrade_exp_" + miss_dir );
+                start_upgrade( next_upgrade( miss_dir, 1 ), "_faction_upgrade_exp_" + miss_dir );
             } else if( miss_id == "Recover Ally, " + miss_dir + " Expansion" ) {
                 upgrade_return( dir, "_faction_upgrade_exp_" + miss_dir );
             }
@@ -1383,7 +1372,7 @@ npc_ptr basecamp::start_mission( const std::string &miss_id, time_duration durat
         popup( _( "You don't have enough food stored to feed your companion." ) );
         return nullptr;
     }
-    npc_ptr comp = talk_function::individual_mission( pos, basecamp_id, desc, miss_id, false,
+    npc_ptr comp = talk_function::individual_mission( omt_pos, basecamp_id, desc, miss_id, false,
                    equipment, skill_tested, skill_level );
     if( comp != nullptr ) {
         comp->companion_mission_time_ret = calendar::turn + duration;
@@ -1419,7 +1408,6 @@ void basecamp::start_cut_logs()
 {
     std::vector<std::string> log_sources = { "forest", "forest_thick", "forest_water" };
     popup( _( "Forests and swamps are the only valid cutting locations." ) );
-    const tripoint omt_pos = pos;
     tripoint forest = om_target_tile( omt_pos, 1, 50, log_sources );
     if( forest != tripoint( -999, -999, -999 ) ) {
         standard_npc sample_npc( "Temp" );
@@ -1477,7 +1465,6 @@ void basecamp::start_clearcut()
 {
     std::vector<std::string> log_sources = { "forest", "forest_thick" };
     popup( _( "Forests are the only valid cutting locations." ) );
-    const tripoint omt_pos = pos;
     tripoint forest = om_target_tile( omt_pos, 1, 50, log_sources );
     if( forest != tripoint( -999, -999, -999 ) ) {
         standard_npc sample_npc( "Temp" );
@@ -1516,7 +1503,6 @@ void basecamp::start_setup_hide_site()
                                                 "field"
                                               };
     popup( _( "Forests, swamps, and fields are valid hide site locations." ) );
-    const tripoint omt_pos = pos;
     tripoint forest = om_target_tile( omt_pos, 10, 90, hide_locations, true, true, omt_pos, true );
     if( forest != tripoint( -999, -999, -999 ) ) {
         int dist = rl_dist( forest.x, forest.y, omt_pos.x, omt_pos.y );
@@ -1556,7 +1542,6 @@ void basecamp::start_relay_hide_site()
 {
     std::vector<std::string> hide_locations = { "faction_hide_site_0" };
     popup( _( "You must select an existing hide site." ) );
-    const tripoint omt_pos = pos;
     tripoint forest = om_target_tile( omt_pos, 10, 90, hide_locations, true, true, omt_pos, true );
     if( forest != tripoint( -999, -999, -999 ) ) {
         int dist = rl_dist( forest.x, forest.y, omt_pos.x, omt_pos.y );
@@ -1633,7 +1618,6 @@ void basecamp::start_fortifications( std::string &bldg_exp )
     popup( _( "Select a start and end point.  Line must be straight.  Fields, forests, and "
               "swamps are valid fortification locations.  In addition to existing fortification "
               "constructions." ) );
-    const tripoint omt_pos = pos;
     tripoint start = om_target_tile( omt_pos, 2, 90, allowed_locations );
     popup( _( "Select an end point." ) );
     tripoint stop = om_target_tile( omt_pos, 2, 90, allowed_locations, true, false, start );
@@ -1709,7 +1693,7 @@ void basecamp::start_combat_mission( const std::string &miss )
 {
     popup( _( "Select checkpoints until you reach maximum range or select the last point again "
               "to end." ) );
-    tripoint start = pos;
+    tripoint start = omt_pos;
     std::vector<tripoint> scout_points = om_companion_path( start, 90, true );
     if( scout_points.empty() ) {
         return;
@@ -2013,7 +1997,7 @@ bool basecamp::start_garage_chop( const std::string &dir, const tripoint &omt_tg
 // camp faction companion mission recovery functions
 npc_ptr basecamp::companion_choose_return( const std::string &miss_id, time_duration min_duration )
 {
-    return talk_function::companion_choose_return( pos, basecamp_id, miss_id,
+    return talk_function::companion_choose_return( omt_pos, basecamp_id, miss_id,
             calendar::turn - min_duration );
 }
 void basecamp::finish_return( npc &comp, bool fixed_time, const std::string &return_msg,
@@ -2069,7 +2053,7 @@ bool basecamp::upgrade_return( const std::string &dir, const std::string &miss )
         return false;
     }
 
-    const std::string bldg = next_upgrade( dir );
+    const std::string bldg = next_upgrade( dir, 1 );
     if( bldg == "null" ) {
         return false;
     }
@@ -2464,7 +2448,6 @@ bool basecamp::survey_return()
         return false;
     }
     editmap edit;
-    tripoint omt_pos = pos;
     if( !edit.mapgen_set( pos_expansion_name_id[expan], omt_pos, 1 ) ) {
         return false;
     }
@@ -2964,6 +2947,13 @@ void om_line_mark( const tripoint &origin, const tripoint &dest, bool add_notes,
     }
 }
 
+std::string get_mission_action_string( const std::string &input_mission )
+{
+    const bcp_miss_data &miss_info = basecamp_missions_info[ input_mission ];
+    return miss_info.action;
+
+}
+
 bool om_set_hide_site( npc &comp, const tripoint &omt_tgt,
                        const std::vector<item *> &itms,
                        const std::vector<item *> &itms_rem )
@@ -3121,7 +3111,7 @@ bool basecamp::set_sort_points( bool reset_pts, bool choose_pts )
 {
     std::vector<tripoint> new_pts;
     for( std::pair<const std::string, point> sort_pt : sort_point_data ) {
-        tripoint default_pt = pos + sort_pt.second;
+        tripoint default_pt = omt_pos + sort_pt.second;
         new_pts.push_back( default_pt );
     }
     if( reset_pts ) {
@@ -3310,7 +3300,7 @@ int basecamp::recruit_evaluation( int &sbase, int &sexpansions, int &sfaction, i
         if( e == expansions.end() ) {
             continue;
         }
-        if( e->second.cur_level >= 0 && next_upgrade( dir ) == "null" ) {
+        if( e->second.cur_level >= 0 && next_upgrade( dir, 1 ) == "null" ) {
             sexpansions += 2;
         }
         if( e->second.type == "farm" && e->second.cur_level > 0 ) {
@@ -3491,7 +3481,7 @@ bool basecamp::distribute_food()
     validate_sort_points();
     tripoint p_food_stock = sort_points[ static_cast<size_t>( sort_pt_ids::cfood ) ];
     tripoint p_trash = sort_points[ static_cast<size_t>( sort_pt_ids::trash ) ];
-    tripoint p_litter = pos + point( -7, 0 );
+    tripoint p_litter = bb_pos + point( -7, 0 );
     tripoint p_tool = sort_points[ static_cast<size_t>( sort_pt_ids::tools ) ];
 
     if( g->m.i_at( p_food_stock ).empty() ) {
