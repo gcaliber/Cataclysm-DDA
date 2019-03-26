@@ -2310,7 +2310,7 @@ void iexamine::fireplace( player &p, const tripoint &examp )
         }
     }
 
-    const bool has_firestarter = firestarters.size() > 0;
+    const bool has_firestarter = !firestarters.empty();
     const bool has_bionic_firestarter = p.has_bionic( bionic_id( "bio_lighter" ) ) &&
                                         p.power_level >= bionic_id( "bio_lighter" )->power_activate;
 
@@ -2581,22 +2581,10 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
     }
 }
 
-//probably should move this functionality into the furniture JSON entries if we want to have more than a few "kegs"
 static units::volume get_keg_capacity( const tripoint &pos )
 {
     const furn_t &furn = g->m.furn( pos ).obj();
-    if( furn.id == "f_standing_tank" )  {
-        return units::from_liter( 300 );
-    } else if( furn.id == "f_wood_keg" )  {
-        return units::from_liter( 125 );
-    } else if( furn.id == "f_water_heater" )  {
-        return units::from_liter( 60 );
-    }
-    //add additional cases above
-    else                                {
-        //if whatever you're examining isn't a keg, it should have no available volume
-        return 0_ml;
-    }
+    return furn.keg_capacity;
 }
 
 /**
@@ -4101,7 +4089,6 @@ void smoker_activate( player &p, const tripoint &examp )
             add_msg( _( "You remove %s from the rack." ), it.tname().c_str() );
             g->m.add_item_or_charges( p.pos(), it );
             g->m.i_rem( examp, i );
-            i--;
             return;
         }
         if( it.has_flag( "SMOKED" ) && it.has_flag( "SMOKABLE" ) ) {
@@ -4258,7 +4245,7 @@ void smoker_load_food( player &p, const tripoint &examp, const units::volume &re
     }
     count = 0;
     auto what = entries[smenu.ret];
-    for( auto c : comps ) {
+    for( const auto &c : comps ) {
         if( c.type == what->typeId() ) {
             count = c.count;
         }
@@ -4318,7 +4305,7 @@ void smoker_load_food( player &p, const tripoint &examp, const units::volume &re
         return;
     }
 
-    for( item m : moved ) {
+    for( const item &m : moved ) {
         g->m.add_item( examp, m );
         p.mod_moves( -p.item_handling_cost( m ) );
         add_msg( m_info, _( "You carefully place %s %s in the rack." ), amount, m.nname( m.typeId(),
