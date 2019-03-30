@@ -589,8 +589,78 @@
   },
   {
     "type": "overmap_terrain",
+    "id": "s_restaurant_roof",
+    "name": "restaurant roof",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_1",
+    "name": "restaurant",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_roof_1",
+    "name": "restaurant roof",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_2",
+    "name": "restaurant",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_roof_2",
+    "name": "restaurant roof",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_3",
+    "name": "restaurant",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_roof_3",
+    "name": "restaurant roof",
+    "copy-from": "generic_city_building",
+    "color": "pink"
+  },
+  {
+    "type": "overmap_terrain",
     "id": "s_restaurant_fast",
     "name": "fast food restaurant",
+    "copy-from": "generic_city_building",
+    "color": "yellow_magenta"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_fast_roof",
+    "name": "fast food restaurant roof",
+    "copy-from": "generic_city_building",
+    "color": "yellow_magenta"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_fast_1",
+    "name": "fast food restaurant",
+    "copy-from": "generic_city_building",
+    "color": "yellow_magenta"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "s_restaurant_fast_roof_1",
+    "name": "fast food restaurant roof",
     "copy-from": "generic_city_building",
     "color": "yellow_magenta"
   },
@@ -3251,6 +3321,14 @@
     "color": "i_yellow"
   },
   {
+    "id": "art_gallery_roof",
+    "type": "overmap_terrain",
+    "copy-from": "generic_city_building",
+    "name": "art gallery roof",
+    "sym": 97,
+    "color": "i_yellow"
+  },
+  {
     "id": "state_park_0_0",
     "type": "overmap_terrain",
     "copy-from": "generic_city_building_no_sidewalk",
@@ -3447,6 +3525,20 @@
     "type": "overmap_terrain",
     "id": "bakery",
     "name": "bakery",
+    "copy-from": "generic_city_building",
+    "color": "c_yellow_white"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "bakery_roof",
+    "name": "bakery roof",
+    "copy-from": "generic_city_building",
+    "color": "c_yellow_white"
+  },
+  {
+    "type": "overmap_terrain",
+    "id": "bakery_upper_roof",
+    "name": "bakery roof",
     "copy-from": "generic_city_building",
     "color": "c_yellow_white"
   },
