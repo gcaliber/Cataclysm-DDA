@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <array>
+#include <memory>
+#include <sstream>
+#include <unordered_map>
+#include <utility>
 
 #include "damage.h"
 #include "debug.h"
@@ -16,6 +21,12 @@
 #include "skill.h"
 #include "string_formatter.h"
 #include "translations.h"
+#include "color.h"
+#include "creature.h"
+#include "cursesdef.h"
+#include "item.h"
+#include "pimpl.h"
+#include "pldata.h"
 
 const skill_id skill_melee( "melee" );
 const skill_id skill_bashing( "bashing" );
@@ -240,7 +251,7 @@ void check( const ma_requirements &req, const std::string &display_text )
 {
     for( auto &r : req.req_buffs ) {
         if( !r.is_valid() ) {
-            debugmsg( "ma buff %s of %s does not exist", r.c_str(), display_text.c_str() );
+            debugmsg( "ma buff %s of %s does not exist", r.c_str(), display_text );
         }
     }
 }

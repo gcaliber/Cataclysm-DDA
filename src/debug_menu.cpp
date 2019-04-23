@@ -1,8 +1,18 @@
 #include "debug_menu.h"
 
+#include <stddef.h>
 #include <algorithm>
 #include <chrono>
 #include <vector>
+#include <array>
+#include <iterator>
+#include <list>
+#include <map>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 #include "action.h"
 #include "coordinate_conversions.h"
@@ -22,6 +32,18 @@
 #include "string_input_popup.h"
 #include "ui.h"
 #include "vitamin.h"
+#include "color.h"
+#include "debug.h"
+#include "enums.h"
+#include "faction.h"
+#include "game_constants.h"
+#include "int_id.h"
+#include "inventory.h"
+#include "item.h"
+#include "omdata.h"
+#include "optional.h"
+#include "pldata.h"
+#include "translations.h"
 
 namespace debug_menu
 {
@@ -105,7 +127,8 @@ void character_edit_menu()
         std::stringstream data;
         data << np->name << " " << ( np->male ? _( "Male" ) : _( "Female" ) ) << std::endl;
         data << np->myclass.obj().get_name() << "; " <<
-             npc_attitude_name( np->get_attitude() ) << std::endl;
+             npc_attitude_name( np->get_attitude() ) << "; " <<
+             ( np->my_fac ? np->my_fac->name : _( "no faction" ) ) << std::endl;
         if( np->has_destination() ) {
             data << string_format( _( "Destination: %d:%d:%d (%s)" ),
                                    np->goal.x, np->goal.y, np->goal.z,

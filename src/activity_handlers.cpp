@@ -1,8 +1,18 @@
 #include "activity_handlers.h"
 
+#include <limits.h>
+#include <stddef.h>
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <array>
+#include <iterator>
+#include <memory>
+#include <ostream>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 #include "action.h"
 #include "advanced_inv.h"
@@ -43,6 +53,31 @@
 #include "vehicle.h"
 #include "vpart_position.h"
 #include "map_selector.h"
+#include "bodypart.h"
+#include "calendar.h"
+#include "cata_utility.h"
+#include "character.h"
+#include "creature.h"
+#include "damage.h"
+#include "enums.h"
+#include "int_id.h"
+#include "inventory.h"
+#include "item.h"
+#include "item_group.h"
+#include "item_location.h"
+#include "item_stack.h"
+#include "iuse.h"
+#include "line.h"
+#include "monster.h"
+#include "omdata.h"
+#include "optional.h"
+#include "pimpl.h"
+#include "pldata.h"
+#include "ret_val.h"
+#include "string_id.h"
+#include "units.h"
+
+class npc;
 
 #define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
 
@@ -1860,7 +1895,7 @@ void activity_handlers::reload_finish( player_activity *act, player *p )
     } else if( reloadable.is_watertight_container() ) {
         msg = _( "You refill the %s." );
     }
-    add_msg( msg.c_str(), reloadable.tname() );
+    add_msg( m_neutral, msg, reloadable.tname() );
 }
 
 void activity_handlers::start_fire_finish( player_activity *act, player *p )
@@ -2650,10 +2685,11 @@ void activity_handlers::craft_do_turn( player_activity *act, player *p )
     // item_location::get_item() will return nullptr if the item is lost
     if( !craft ) {
         p->add_msg_player_or_npc(
-            string_format( _( "You no longer have the %1$s in your possession.  You stop crafting. "
-                              " Reactivate the %1$s to continue crafting." ), craft->tname() ),
-            string_format( _( "<npcname> no longer has the %s in their possession.  <npcname> stops"
-                              " crafting." ), craft->tname() )
+            string_format( _( "You no longer have the in progress craft in your possession.  "
+                              "You stop crafting.  "
+                              "Reactivate the in progress craft to continue crafting." ) ),
+            string_format( _( "<npcname> no longer has the in progress craft in their possession.  "
+                              "<npcname> stops crafting." ) )
         );
         p->cancel_activity();
         return;

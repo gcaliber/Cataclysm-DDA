@@ -1,6 +1,12 @@
 #include "game.h" // IWYU pragma: associated
 
+#include <stdlib.h>
+#include <math.h>
 #include <chrono>
+#include <iterator>
+#include <set>
+#include <sstream>
+#include <utility>
 
 #include "action.h"
 #include "advanced_inv.h"
@@ -44,6 +50,18 @@
 #include "vpart_reference.h"
 #include "weather.h"
 #include "worldfactory.h"
+#include "bodypart.h"
+#include "character.h"
+#include "color.h"
+#include "damage.h"
+#include "lightmap.h"
+#include "line.h"
+#include "player_activity.h"
+#include "rng.h"
+#include "string_formatter.h"
+#include "translations.h"
+#include "ui.h"
+#include "units.h"
 
 #define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
 
@@ -112,7 +130,6 @@ input_context game::get_player_input( std::string &action )
     if( get_option<bool>( "ANIMATIONS" ) ) {
         const int TOTAL_VIEW = MAX_VIEW_DISTANCE * 2 + 1;
         int iStartX = ( TERRAIN_WINDOW_WIDTH > TOTAL_VIEW ) ? ( TERRAIN_WINDOW_WIDTH - TOTAL_VIEW ) / 2 : 0;
-        iStartX -= g->sidebar_offset.x;
         int iStartY = ( TERRAIN_WINDOW_HEIGHT > TOTAL_VIEW ) ? ( TERRAIN_WINDOW_HEIGHT - TOTAL_VIEW ) / 2 :
                       0;
         int iEndX = ( TERRAIN_WINDOW_WIDTH > TOTAL_VIEW ) ? TERRAIN_WINDOW_WIDTH -
@@ -132,8 +149,8 @@ input_context game::get_player_input( std::string &action )
 
         //x% of the Viewport, only shown on visible areas
         const auto weather_info = get_weather_animation( weather );
-        int offset_x = ( u.posx() + u.view_offset.x ) - ( getmaxx( w_terrain ) / 2 ) + g->sidebar_offset.x;
-        int offset_y = ( u.posy() + u.view_offset.y ) - ( getmaxy( w_terrain ) / 2 ) + g->sidebar_offset.y;
+        int offset_x = u.posx() + u.view_offset.x - getmaxx( w_terrain ) / 2;
+        int offset_y = u.posy() + u.view_offset.y - getmaxy( w_terrain ) / 2;
 
 #if defined(TILES)
         if( tile_iso && use_tiles ) {
@@ -187,7 +204,7 @@ input_context game::get_player_input( std::string &action )
                         wmove( w_terrain, location.y - offset_y, location.x - offset_x );
                         if( !m.apply_vision_effects( w_terrain, m.get_visibility( lighting, cache ) ) ) {
                             m.drawsq( w_terrain, u, location, false, true,
-                                      u.pos() + u.view_offset + g->sidebar_offset,
+                                      u.pos() + u.view_offset,
                                       lighting == LL_LOW, lighting == LL_BRIGHT );
                         }
                     }
@@ -227,7 +244,7 @@ input_context game::get_player_input( std::string &action )
                                 wmove( w_terrain, location.y - offset_y, location.x - offset_x );
                                 if( !m.apply_vision_effects( w_terrain, m.get_visibility( lighting, cache ) ) ) {
                                     m.drawsq( w_terrain, u, location, false, true,
-                                              u.pos() + u.view_offset + g->sidebar_offset,
+                                              u.pos() + u.view_offset,
                                               lighting == LL_LOW, lighting == LL_BRIGHT );
                                 }
                             }
@@ -1938,6 +1955,7 @@ bool game::handle_action()
             case ACTION_OPTIONS:
                 get_options().show( true );
                 refresh_all();
+                g->init_ui( true );
                 break;
 
             case ACTION_AUTOPICKUP:

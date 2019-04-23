@@ -1,16 +1,22 @@
 #include "iuse_software_sokoban.h"
 
 #include <sstream>
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <stdexcept>
 
 #include "cata_utility.h"
 #include "catacharset.h"
 #include "cursesdef.h"
-#include "debug.h"
 #include "input.h"
 #include "output.h"
 #include "path_info.h"
 #include "string_formatter.h"
 #include "translations.h"
+#include "color.h"
+#include "enums.h"
+#include "optional.h"
 
 sokoban_game::sokoban_game() = default;
 
@@ -207,8 +213,7 @@ void sokoban_game::draw_level( const catacurses::window &w_sokoban )
                     sTile = "@";
                 }
 
-                mvwprintz( w_sokoban, iOffsetY + ( elem.first ), iOffsetX + ( iterX->first ), cCol,
-                           sTile.c_str() );
+                mvwprintz( w_sokoban, iOffsetY + ( elem.first ), iOffsetX + ( iterX->first ), cCol, sTile );
             }
         }
     }

@@ -1,17 +1,21 @@
 #include "pickup.h"
 
+#include <limits.h>
+#include <stddef.h>
 #include <map>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
 
 #include "auto_pickup.h"
 #include "cata_utility.h"
 #include "debug.h"
 #include "game.h"
 #include "input.h"
-#include "item_location.h"
 #include "item_search.h"
-#include "itype.h"
 #include "map.h"
 #include "mapdata.h"
 #include "messages.h"
@@ -22,10 +26,22 @@
 #include "string_input_popup.h"
 #include "translations.h"
 #include "ui.h"
-#include "veh_interact.h"
 #include "vehicle.h"
 #include "vpart_position.h"
 #include "vpart_reference.h"
+#include "character.h"
+#include "clzones.h"
+#include "color.h"
+#include "cursesdef.h"
+#include "enums.h"
+#include "int_id.h"
+#include "item.h"
+#include "line.h"
+#include "optional.h"
+#include "player_activity.h"
+#include "ret_val.h"
+#include "string_id.h"
+#include "units.h"
 
 typedef std::pair<item, int> ItemCount;
 typedef std::map<std::string, ItemCount> PickupMap;
@@ -240,7 +256,7 @@ bool pick_one_up( const tripoint &pickup_target, item &newit, vehicle *veh,
                     add_msg( m_info, _( "Wielding - %s" ), u.weapon.display_name() );
                 }
             } else {
-                add_msg( wield_check.c_str() );
+                add_msg( m_neutral, wield_check.c_str() );
             }
             break;
         case SPILL:

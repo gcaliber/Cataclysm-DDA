@@ -1,5 +1,9 @@
 #include "mattack_actors.h"
 
+#include <math.h>
+#include <algorithm>
+#include <memory>
+
 #include "game.h"
 #include "generic_factory.h"
 #include "gun_mode.h"
@@ -10,9 +14,17 @@
 #include "messages.h"
 #include "monster.h"
 #include "npc.h"
-#include "output.h"
 #include "sounds.h"
 #include "translations.h"
+#include "calendar.h"
+#include "creature.h"
+#include "enums.h"
+#include "item.h"
+#include "json.h"
+#include "player.h"
+#include "pldata.h"
+#include "rng.h"
+#include "material.h"
 
 const efftype_id effect_grabbed( "grabbed" );
 const efftype_id effect_bite( "bite" );
@@ -222,8 +234,7 @@ bool melee_actor::call( monster &z ) const
         auto msg_type = target == &g->u ? m_warning : m_info;
         sfx::play_variant_sound( "mon_bite", "bite_miss", sfx::get_heard_volume( z.pos() ),
                                  sfx::get_heard_angle( z.pos() ) );
-        target->add_msg_player_or_npc( msg_type, miss_msg_u.c_str(), miss_msg_npc.c_str(),
-                                       z.name() );
+        target->add_msg_player_or_npc( msg_type, miss_msg_u, miss_msg_npc, z.name() );
         return true;
     }
 
@@ -247,7 +258,7 @@ bool melee_actor::call( monster &z ) const
     } else {
         sfx::play_variant_sound( "mon_bite", "bite_miss", sfx::get_heard_volume( z.pos() ),
                                  sfx::get_heard_angle( z.pos() ) );
-        target->add_msg_player_or_npc( no_dmg_msg_u.c_str(), no_dmg_msg_npc.c_str(), z.name(),
+        target->add_msg_player_or_npc( m_neutral, no_dmg_msg_u, no_dmg_msg_npc, z.name(),
                                        body_part_name_accusative( bp_hit ) );
     }
 
@@ -263,7 +274,7 @@ void melee_actor::on_damage( monster &z, Creature &target, dealt_damage_instance
     }
     auto msg_type = target.attitude_to( g->u ) == Creature::A_FRIENDLY ? m_bad : m_neutral;
     const body_part bp = dealt.bp_hit;
-    target.add_msg_player_or_npc( msg_type, hit_dmg_u.c_str(), hit_dmg_npc.c_str(), z.name(),
+    target.add_msg_player_or_npc( msg_type, hit_dmg_u, hit_dmg_npc, z.name(),
                                   body_part_name_accusative( bp ) );
 
     for( const auto &eff : effects ) {

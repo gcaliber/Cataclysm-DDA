@@ -2,6 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <exception>
+#include <functional>
+#include <map>
+#include <memory>
+#include <sstream>
 
 #include "auto_pickup.h"
 #include "cata_utility.h"
@@ -26,6 +32,11 @@
 #include "text_snippets.h"
 #include "translations.h"
 #include "worldfactory.h"
+#include "color.h"
+#include "enums.h"
+#include "options.h"
+#include "pldata.h"
+#include "string_formatter.h"
 
 #define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
 
@@ -744,8 +755,8 @@ bool main_menu::new_character_tab()
                            c_white, "%s", _( "Press 'd' to delete a preset." ) );
                 for( int i = 0; i < static_cast<int>( templates.size() ); i++ ) {
                     int line = iMenuOffsetY - 4 - i;
-                    mvwprintz( w_open, line, 20 + iMenuOffsetX + extra_w / 2,
-                               ( sel3 == i ? h_white : c_white ), "%s", templates[i].c_str() );
+                    mvwprintz( w_open, line, 20 + iMenuOffsetX + extra_w / 2, ( sel3 == i ? h_white : c_white ), "%s",
+                               templates[i] );
                 }
             }
             wrefresh( w_open );
@@ -910,8 +921,7 @@ bool main_menu::load_character_tab()
                 savegames.erase( new_end, savegames.end() );
             }
 
-            mvwprintz( w_open, iMenuOffsetY - 2 - sel2, 15 + iMenuOffsetX + extra_w / 2,
-                       h_white, "%s", wn.c_str() );
+            mvwprintz( w_open, iMenuOffsetY - 2 - sel2, 15 + iMenuOffsetX + extra_w / 2, h_white, "%s", wn );
 
             if( savegames.empty() ) {
                 mvwprintz( w_open, iMenuOffsetY - 2 - sel2, 40 + iMenuOffsetX + extra_w / 2,

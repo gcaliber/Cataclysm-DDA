@@ -1,15 +1,19 @@
 #include "veh_interact.h"
 
+#include <stdlib.h>
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <functional>
 #include <iterator>
 #include <list>
 #include <numeric>
 #include <string>
+#include <array>
+#include <memory>
+#include <set>
+#include <type_traits>
+#include <utility>
 
-#include "action.h"
 #include "activity_handlers.h"
 #include "cata_utility.h"
 #include "catacharset.h"
@@ -37,6 +41,15 @@
 #include "vpart_position.h"
 #include "vpart_range.h"
 #include "vpart_reference.h"
+#include "calendar.h"
+#include "enums.h"
+#include "game_constants.h"
+#include "optional.h"
+#include "requirements.h"
+#include "tileray.h"
+#include "units.h"
+#include "material.h"
+#include "pldata.h"
 
 static inline const std::string status_color( bool status )
 {
@@ -397,10 +410,7 @@ void veh_interact::cache_tool_availability()
 
 void veh_interact::cache_tool_availability_update_lifting( const tripoint &world_cursor_pos )
 {
-    max_lift = std::max( { g->u.max_quality( LIFT ),
-                           map_selector( g->u.pos(), PICKUP_RANGE ).max_quality( LIFT ),
-                           vehicle_selector( world_cursor_pos, 4, true, true ).max_quality( LIFT )
-                         } );
+    max_lift = g->u.best_nearby_lifting_assist( world_cursor_pos );
 }
 
 /**

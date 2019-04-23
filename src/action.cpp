@@ -1,8 +1,11 @@
 #include "action.h"
 
+#include <limits.h>
 #include <algorithm>
 #include <istream>
 #include <iterator>
+#include <memory>
+#include <utility>
 
 #include "cata_utility.h"
 #include "debug.h"
@@ -22,6 +25,14 @@
 #include "ui.h"
 #include "vehicle.h"
 #include "vpart_position.h"
+#include "creature.h"
+#include "cursesdef.h"
+#include "enums.h"
+#include "item.h"
+#include "ret_val.h"
+#include "itype.h"
+
+class inventory;
 
 void parse_keymap( std::istream &keymap_txt, std::map<char, action_id> &kmap,
                    std::set<action_id> &unbound_keymap );
@@ -965,7 +976,7 @@ cata::optional<tripoint> choose_adjacent_highlight( const std::string &message,
         if( should_highlight( pos ) ) {
             highlighted = true;
             g->m.drawsq( g->w_terrain, g->u, pos,
-                         true, true, g->u.pos() + g->u.view_offset + g->sidebar_offset );
+                         true, true, g->u.pos() + g->u.view_offset );
         }
     }
     if( highlighted ) {

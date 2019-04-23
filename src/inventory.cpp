@@ -1,23 +1,37 @@
 #include "inventory.h"
 
+#include <limits.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <algorithm>
+#include <iterator>
+#include <memory>
+#include <set>
 
 #include "debug.h"
 #include "game.h"
 #include "iexamine.h"
-#include "itype.h"
-#include "iuse_actor.h"
 #include "map.h"
 #include "map_iterator.h"
 #include "mapdata.h"
 #include "messages.h" //for rust message
 #include "npc.h"
 #include "options.h"
-#include "output.h"
 #include "translations.h"
 #include "vehicle.h"
 #include "vpart_position.h"
 #include "vpart_reference.h"
+#include "calendar.h"
+#include "character.h"
+#include "damage.h"
+#include "enums.h"
+#include "optional.h"
+#include "player.h"
+#include "rng.h"
+#include "material.h"
+
+struct itype;
 
 const invlet_wrapper
 inv_chars( "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#&()+.:;=@[\\]^_{|}" );
@@ -993,21 +1007,21 @@ void inventory::assign_empty_invlet( item &it, const Character &p, const bool fo
         return;
     }
 
-    std::set<char> cur_inv = p.allocated_invlets();
+    invlets_bitset cur_inv = p.allocated_invlets();
     itype_id target_type = it.typeId();
-    for( const auto &iter : assigned_invlet ) {
-        if( iter.second == target_type && !cur_inv.count( iter.first ) ) {
+    for( auto iter : assigned_invlet ) {
+        if( iter.second == target_type && !cur_inv[iter.first] ) {
             it.invlet = iter.first;
             return;
         }
     }
-    if( cur_inv.size() < inv_chars.size() ) {
+    if( cur_inv.count() < inv_chars.size() ) {
         for( const auto &inv_char : inv_chars ) {
             if( assigned_invlet.count( inv_char ) ) {
                 // don't overwrite assigned keys
                 continue;
             }
-            if( cur_inv.find( inv_char ) == cur_inv.end() ) {
+            if( !cur_inv[inv_char] ) {
                 it.invlet = inv_char;
                 return;
             }
@@ -1085,15 +1099,15 @@ void inventory::set_stack_favorite( const int position, const bool favorite )
     }
 }
 
-std::set<char> inventory::allocated_invlets() const
+invlets_bitset inventory::allocated_invlets() const
 {
-    std::set<char> invlets;
+    invlets_bitset invlets;
+
     for( const auto &stack : items ) {
         const char invlet = stack.front().invlet;
-        if( invlet != 0 ) {
-            invlets.insert( invlet );
-        }
+        invlets.set( invlet );
     }
+    invlets[0] = false;
     return invlets;
 }
 

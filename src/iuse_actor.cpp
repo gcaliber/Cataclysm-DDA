@@ -1,7 +1,16 @@
 #include "iuse_actor.h"
 
+#include <ctype.h>
+#include <stddef.h>
 #include <algorithm>
 #include <sstream>
+#include <array>
+#include <cmath>
+#include <functional>
+#include <iterator>
+#include <list>
+#include <memory>
+#include <type_traits>
 
 #include "action.h"
 #include "activity_handlers.h"
@@ -20,7 +29,6 @@
 #include "field.h"
 #include "game.h"
 #include "game_inventory.h"
-#include "generic_factory.h"
 #include "item.h"
 #include "item_factory.h"
 #include "itype.h"
@@ -51,6 +59,19 @@
 #include "vehicle.h"
 #include "vitamin.h"
 #include "weather.h"
+#include "creature.h"
+#include "enums.h"
+#include "int_id.h"
+#include "inventory.h"
+#include "item_location.h"
+#include "json.h"
+#include "line.h"
+#include "player_activity.h"
+#include "recipe.h"
+#include "rng.h"
+#include "character.h"
+
+class npc;
 
 const skill_id skill_mechanics( "mechanics" );
 const skill_id skill_survival( "survival" );
@@ -163,14 +184,14 @@ long iuse_transform::use( player &p, item &it, bool t, const tripoint &pos ) con
 
     if( need_charges && it.ammo_remaining() < need_charges ) {
         if( possess ) {
-            p.add_msg_if_player( m_info, need_charges_msg.c_str(), it.tname() );
+            p.add_msg_if_player( m_info, need_charges_msg, it.tname() );
         }
         return 0;
     }
 
     if( need_fire && possess ) {
         if( !p.use_charges_if_avail( "fire", need_fire ) ) {
-            p.add_msg_if_player( m_info, need_fire_msg.c_str(), it.tname() );
+            p.add_msg_if_player( m_info, need_fire_msg, it.tname() );
             return 0;
         }
         if( p.is_underwater() ) {
@@ -1197,7 +1218,7 @@ long firestarter_actor::use( player &p, item &it, bool t, const tripoint &spos )
             _( "If the current weather holds, it will take around %d minutes to light a fire." );
         static const std::string normal_msg =
             _( "At your skill level, it will take around %d minutes to light a fire." );
-        p.add_msg_if_player( m_info, ( need_sunlight ? sun_msg : normal_msg ).c_str(),
+        p.add_msg_if_player( m_info, ( need_sunlight ? sun_msg : normal_msg ),
                              moves / to_moves<int>( 1_minutes ) );
     } else if( moves < to_moves<int>( 2_turns ) && g->m.is_flammable( pos ) ) {
         // If less than 2 turns, don't start a long action

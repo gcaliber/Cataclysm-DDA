@@ -1,8 +1,17 @@
 #include "iexamine.h"
 
+#include <limits.h>
+#include <math.h>
 #include <algorithm>
 #include <cstdlib>
 #include <sstream>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <set>
+#include <type_traits>
+#include <utility>
 
 #include "activity_handlers.h"
 #include "ammo.h"
@@ -29,7 +38,6 @@
 #include "mapdata.h"
 #include "material.h"
 #include "messages.h"
-#include "mission.h"
 #include "mission_companion.h"
 #include "monster.h"
 #include "mtype.h"
@@ -55,6 +63,23 @@
 #include "vpart_position.h"
 #include "vpart_reference.h"
 #include "weather.h"
+#include "bodypart.h"
+#include "color.h"
+#include "creature.h"
+#include "cursesdef.h"
+#include "damage.h"
+#include "enums.h"
+#include "game_constants.h"
+#include "int_id.h"
+#include "item.h"
+#include "item_location.h"
+#include "item_stack.h"
+#include "iuse.h"
+#include "map_selector.h"
+#include "pimpl.h"
+#include "player_activity.h"
+#include "pldata.h"
+#include "character.h"
 
 const mtype_id mon_dark_wyrm( "mon_dark_wyrm" );
 const mtype_id mon_fungal_blossom( "mon_fungal_blossom" );
@@ -710,7 +735,7 @@ void iexamine::cardreader( player &p, const tripoint &examp )
 {
     bool open = false;
     itype_id card_type = ( g->m.ter( examp ) == t_card_science ? "id_science" :
-                           "id_military" );
+                           g->m.ter( examp ) == t_card_military ? "id_military" : "id_industrial" );
     if( p.has_amount( card_type, 1 ) && query_yn( _( "Swipe your ID card?" ) ) ) {
         p.mod_moves( -100 );
         for( const tripoint &tmp : g->m.points_in_radius( examp, 3 ) ) {
