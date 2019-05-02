@@ -254,10 +254,13 @@ void activity_handlers::burrow_finish( player_activity *act, player *p )
 
 bool check_butcher_cbm( const int roll )
 {
-    // 2/3 chance of failure with a roll of 0, 2/6 with a roll of 1, 2/9 etc.
-    // The roll is usually b/t 0 and first_aid-3, so first_aid 4 will succeed
-    // 50%, first_aid 5 will succeed 61%, first_aid 6 will succeed 67%, etc.
-    const bool failed = x_in_y( 2, 3 + roll * 3 );
+    // Failure rates for dissection rolls
+    // 90% at roll 0, 72% at roll 1, 60% at roll 2, 51% @ 3, 45% @ 4, 40% @ 5, ... , 25% @ 10
+    // Roll is roughly a rng(0, -3 + 1st_aid + fine_cut_quality + 1/2 electronics + small_dex_bonus)
+    // Roll is reduced by corpse damage level, but to no less then 0
+    add_msg( m_debug, _( "Roll = %i" ), roll );
+    add_msg( m_debug, _( "Failure chance = %f%%" ), ( 9.0f / ( 10.0f + roll * 2.5f ) ) * 100.0f );
+    const bool failed = x_in_y( 9, ( 10 + roll * 2.5 ) );
     return !failed;
 }
 
@@ -267,10 +270,17 @@ void butcher_cbm_item( const std::string &what, const tripoint &pos,
     if( roll < 0 ) {
         return;
     }
-
-    item cbm( check_butcher_cbm( roll ) ? what : "burnt_out_bionic", age );
-    add_msg( m_good, _( "You discover a %s!" ), cbm.tname() );
-    g->m.add_item( pos, cbm );
+    if( item::find_type( itype_id( what ) )->bionic.has_value() ) {
+        item cbm( check_butcher_cbm( roll ) ? what : "burnt_out_bionic", age );
+        add_msg( m_good, _( "You discover a %s!" ), cbm.tname() );
+        g->m.add_item( pos, cbm );
+    } else if( check_butcher_cbm( roll ) ) {
+        item something( what, age );
+        add_msg( m_good, _( "You discover a %s!" ), something.tname() );
+        g->m.add_item( pos, something );
+    } else {
+        add_msg( m_bad, _( "You discover only damaged organs." ) );
+    }
 }
 
 void butcher_cbm_group( const std::string &group, const tripoint &pos,
@@ -773,10 +783,14 @@ void butchery_drops_harvest( item *corpse_item, const mtype &mt, player &p,
             }
         }
         if( action == DISSECT ) {
+            int roll = roll_butchery() - corpse_item->damage_level( 4 );
+            roll = roll < 0 ? 0 : roll;
+            roll = std::min( entry.max, roll );
+            add_msg( m_debug, _( "Roll penalty for corpse damage = %s" ), 0 - corpse_item->damage_level( 4 ) );
             if( entry.type == "bionic" ) {
-                butcher_cbm_item( entry.drop, p.pos(), calendar::turn, roll_butchery() );
+                butcher_cbm_item( entry.drop, p.pos(), calendar::turn, roll );
             } else if( entry.type == "bionic_group" ) {
-                butcher_cbm_group( entry.drop, p.pos(), calendar::turn, roll_butchery() );
+                butcher_cbm_group( entry.drop, p.pos(), calendar::turn, roll );
             }
             continue;
         }
@@ -1023,6 +1037,7 @@ void activity_handlers::butcher_finish( player_activity *act, player *p )
         skill_level = p->get_skill_level( skill_firstaid );
         skill_level += p->max_quality( quality_id( "CUT_FINE" ) );
         skill_level += p->get_skill_level( skill_electronics ) / 2;
+        add_msg( m_debug, _( "Skill: %s" ), skill_level );
     }
 
     const auto roll_butchery = [&]() {
@@ -1989,6 +2004,7 @@ void activity_handlers::vehicle_finish( player_activity *act, player *p )
                   act->values.size() );
     } else {
         if( vp ) {
+            g->m.invalidate_map_cache( g->get_levz() );
             g->refresh_all();
             // TODO: Z (and also where the activity is queued)
             // Or not, because the vehicle coordinates are dropped anyway
@@ -2304,11 +2320,11 @@ void activity_handlers::repair_item_finish( player_activity *act, player *p )
 
     // Valid Repeat choice and target, attempt repair.
     if( repeat != REPEAT_INIT && act->targets.size() >= 2 ) {
-        item_location &fix = act->targets[1];
+        item_location &fix_location = act->targets[1];
 
         // Remember our level: we want to stop retrying on level up
         const int old_level = p->get_skill_level( actor->used_skill );
-        const auto attempt = actor->repair( *p, *used_tool, fix );
+        const auto attempt = actor->repair( *p, *used_tool, fix_location );
         if( attempt != repair_item_actor::AS_CANT ) {
             if( ploc && ploc->where() == item_location::type::map ) {
                 used_tool->ammo_consume( used_tool->ammo_required(), ploc->position() );
@@ -2328,22 +2344,22 @@ void activity_handlers::repair_item_finish( player_activity *act, player *p )
         // Print message explaining why we stopped
         // But only if we didn't destroy the item (because then it's obvious)
         const bool destroyed = attempt == repair_item_actor::AS_DESTROYED;
-        if( attempt == repair_item_actor::AS_CANT ||
-            destroyed ||
-            !actor->can_repair_target( *p, *fix, !destroyed ) ) {
+        const bool cannot_continue_repair = attempt == repair_item_actor::AS_CANT ||
+                                            destroyed || !actor->can_repair_target( *p, *fix_location, !destroyed );
+        if( cannot_continue_repair ) {
             // Cannot continue to repair target, select another target.
+            // **Warning**: as soon as the item is popped back, it is destroyed and can't be used anymore!
             act->targets.pop_back();
         }
 
-        const bool event_happened =
-            attempt == repair_item_actor::AS_FAILURE ||
-            attempt == repair_item_actor::AS_SUCCESS ||
-            old_level != p->get_skill_level( actor->used_skill );
+        const bool event_happened = attempt == repair_item_actor::AS_FAILURE ||
+                                    attempt == repair_item_actor::AS_SUCCESS ||
+                                    old_level != p->get_skill_level( actor->used_skill );
 
         const bool need_input =
-            repeat == REPEAT_ONCE ||
+            ( repeat == REPEAT_ONCE ) ||
             ( repeat == REPEAT_EVENT && event_happened ) ||
-            ( repeat == REPEAT_FULL && fix->damage() <= 0 );
+            ( repeat == REPEAT_FULL && ( cannot_continue_repair || fix_location->damage() <= 0 ) );
         if( need_input ) {
             repeat = REPEAT_INIT;
         }
@@ -2547,6 +2563,7 @@ void activity_handlers::meditate_finish( player_activity *act, player *p )
 void activity_handlers::aim_do_turn( player_activity *act, player * )
 {
     if( act->index == 0 ) {
+        g->m.invalidate_map_cache( g->get_levz() );
         g->m.build_map_cache( g->get_levz() );
         g->plfire();
     }
@@ -2701,6 +2718,11 @@ void activity_handlers::craft_do_turn( player_activity *act, player *p )
         return;
     }
 
+    if( !p->can_continue_craft( *craft ) ) {
+        p->cancel_activity();
+        return;
+    }
+
     const recipe &rec = craft->get_making();
     const tripoint loc = act->targets.front().where() == item_location::type::character ?
                          tripoint_zero : act->targets.front().position();
@@ -2715,6 +2737,7 @@ void activity_handlers::craft_do_turn( player_activity *act, player *p )
 
     // item_counter represents the percent progress relative to the base batch time
     // stored precise to 5 decimal places ( e.g. 67.32 percent would be stored as 6732000 )
+    const int old_counter = craft->item_counter;
 
     // Base moves for batch size with no speed modifier or assistants
     // Must ensure >= 1 so we don't divide by 0;
@@ -2730,6 +2753,15 @@ void activity_handlers::craft_do_turn( player_activity *act, player *p )
     // Current progress as a percent of base_total_moves to 2 decimal places
     craft->item_counter = round( current_progress / base_total_moves * 10000000.0 );
     p->set_moves( 0 );
+
+    // This is to ensure we don't over count skill steps
+    craft->item_counter = std::min( craft->item_counter, 10000000 );
+
+    // Skill is gained after every 5% progress
+    const int skill_steps = craft->item_counter / 500000 - old_counter / 500000;
+    if( skill_steps > 0 ) {
+        p->craft_skill_gain( *craft, skill_steps );
+    }
 
     // if item_counter has reached 100% or more
     if( craft->item_counter >= 10000000 ) {

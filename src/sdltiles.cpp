@@ -91,6 +91,8 @@ static bool needupdate = false;
 SDL_Texture_Ptr alt_rect_tex = NULL;
 bool alt_rect_tex_enabled = false;
 
+std::array<SDL_Color, color_loader<SDL_Color>::COLOR_NAMES_COUNT> windowsPalette;
+
 /**
  * A class that draws a single character on screen.
  */
@@ -182,7 +184,6 @@ static std::unique_ptr<Font> font;
 static std::unique_ptr<Font> map_font;
 static std::unique_ptr<Font> overmap_font;
 
-static std::array<SDL_Color, color_loader<SDL_Color>::COLOR_NAMES_COUNT> windowsPalette;
 static SDL_Window_Ptr window;
 static SDL_Renderer_Ptr renderer;
 static SDL_PixelFormat_Ptr format;
@@ -1475,6 +1476,7 @@ long arrow_combo_to_numpad( SDL_Keycode mod, SDL_Keycode key )
     return 0;
 }
 
+#if !defined(__ANDROID__)
 static long arrow_combo_modifier = 0;
 
 static long handle_arrow_combo( SDL_Keycode key )
@@ -1490,7 +1492,7 @@ static void end_arrow_combo()
 {
     arrow_combo_modifier = 0;
 }
-
+#endif
 /**
  * Translate SDL key codes to key identifiers used by ncurses, this
  * allows the input_manager to only consider those.
@@ -2500,7 +2502,7 @@ void CheckMessages()
                 if( !g->u.get_hostile_creatures( 60 ).empty() ) {
                     // Only prioritize movement options if we're not driving.
                     if( !g->u.controlling_vehicle ) {
-                        actions.insert( ACTION_TOGGLE_MOVE );
+                        actions.insert( ACTION_CYCLE_MOVE );
                     }
                     // Only prioritize fire weapon options if we're wielding a ranged weapon.
                     if( g->u.weapon.is_gun() || g->u.weapon.has_flag( "REACH_ATTACK" ) ) {
@@ -2509,13 +2511,17 @@ void CheckMessages()
                 }
 
                 // If we're already running, make it simple to toggle running to off.
-                if( g->u.move_mode != "walk" ) {
-                    actions.insert( ACTION_TOGGLE_MOVE );
+                if( g->u.get_movement_mode() == "run" ) {
+                    actions.insert( ACTION_TOGGLE_RUN );
+                }
+                // If we're already crouching, make it simple to toggle crouching to off.
+                if( g->u.get_movement_mode() == "crouch" ) {
+                    actions.insert( ACTION_TOGGLE_CROUCH );
                 }
 
-                // We're not already running or in combat, so remove toggle walk/run
-                if( std::find( actions.begin(), actions.end(), ACTION_TOGGLE_MOVE ) == actions.end() ) {
-                    actions_remove.insert( ACTION_TOGGLE_MOVE );
+                // We're not already running or in combat, so remove cycle walk/run
+                if( std::find( actions.begin(), actions.end(), ACTION_CYCLE_MOVE ) == actions.end() ) {
+                    actions_remove.insert( ACTION_CYCLE_MOVE );
                 }
 
                 // Check if we can perform one of our actions on nearby terrain. If so,
@@ -2586,6 +2592,11 @@ void CheckMessages()
                                 actions_remove.insert( ACTION_MOVE_DOWN );
                             }
                         }
+
+                        // Check for actions that work on nearby tiles and own tile
+                        if( can_interact_at( ACTION_PICKUP, pos ) ) {
+                            actions.insert( ACTION_PICKUP );
+                        }
                     }
                 }
 
@@ -2604,12 +2615,7 @@ void CheckMessages()
                     actions_remove.insert( ACTION_EXAMINE );
                 }
 
-                // If we're standing on items, allow player to pick them up.
-                if( g->m.has_items( g->u.pos() ) ) {
-                    actions.insert( ACTION_PICKUP );
-                }
-
-                // We're not able to pickup anything, so remove it
+                // We're not able to pickup anything nearby, so remove it
                 if( std::find( actions.begin(), actions.end(), ACTION_PICKUP ) == actions.end() ) {
                     actions_remove.insert( ACTION_PICKUP );
                 }

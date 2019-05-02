@@ -381,6 +381,7 @@ static const trait_id trait_RADIOACTIVE3( "RADIOACTIVE3" );
 static const trait_id trait_RADIOGENIC( "RADIOGENIC" );
 static const trait_id trait_REGEN( "REGEN" );
 static const trait_id trait_REGEN_LIZ( "REGEN_LIZ" );
+static const trait_id trait_HAIRROOTS( "HAIRROOTS" );
 static const trait_id trait_ROOTS2( "ROOTS2" );
 static const trait_id trait_ROOTS3( "ROOTS3" );
 static const trait_id trait_SAPIOVORE( "SAPIOVORE" );
@@ -3110,9 +3111,9 @@ void player::shout( std::string msg, bool order )
     sounds::sound( pos(), noise, order ? sounds::sound_t::order : sounds::sound_t::alert, msg );
 }
 
-void player::toggle_move_mode()
+void player::set_movement_mode( std::string new_mode )
 {
-    if( move_mode == "walk" ) {
+    if( new_mode == "run" ) {
         if( stamina > 0 && !has_effect( effect_winded ) ) {
             move_mode = "run";
             if( is_hauling() ) {
@@ -3121,15 +3122,54 @@ void player::toggle_move_mode()
             add_msg( _( "You start running." ) );
         } else {
             add_msg( m_bad, _( "You're too tired to run." ) );
-            move_mode = "walk";
-            add_msg( _( "You start walking." ) );
         }
-    } else if( move_mode == "run" ) {
+    } else if( new_mode == "crouch" ) {
         move_mode = "crouch";
         add_msg( _( "You start crouching." ) );
-    } else if( move_mode == "crouch" ) {
+    } else {
         move_mode = "walk";
         add_msg( _( "You start walking." ) );
+    }
+}
+
+const std::string player::get_movement_mode() const
+{
+    return move_mode;
+}
+
+void player::toggle_run_mode()
+{
+    if( move_mode == "run" ) {
+        set_movement_mode( "walk" );
+    } else {
+        set_movement_mode( "run" );
+    }
+}
+
+void player::toggle_crouch_mode()
+{
+    if( move_mode == "crouch" ) {
+        set_movement_mode( "walk" );
+    } else {
+        set_movement_mode( "crouch" );
+    }
+}
+
+void player::reset_move_mode()
+{
+    if( move_mode != "walk" ) {
+        set_movement_mode( "walk" );
+    }
+}
+
+void player::cycle_move_mode()
+{
+    if( move_mode == "walk" ) {
+        set_movement_mode( "run" );
+    } else if( move_mode == "run" ) {
+        set_movement_mode( "crouch" );
+    } else if( move_mode == "crouch" ) {
+        set_movement_mode( "walk" );
     }
 }
 
@@ -4554,6 +4594,7 @@ needs_rates player::calc_needs_rates()
         rates.thirst = std::min( rates.thirst, std::max( 0.5f, rates.thirst - 0.5f ) );
     }
 
+
     if( asleep ) {
         rates.recovery = 1.0f + mutation_value( "fatigue_regen_modifier" );
         if( !is_hibernating() ) {
@@ -4566,7 +4607,6 @@ needs_rates player::calc_needs_rates()
             const int accelerated_recovery_chance = 24 - intense + 1;
             const float accelerated_recovery_rate = 1.0f / accelerated_recovery_chance;
             rates.recovery += accelerated_recovery_rate;
-
         } else {
             // Hunger and thirst advance *much* more slowly whilst we hibernate.
             rates.hunger *= ( 2.0f / 7.0f );
@@ -4580,9 +4620,12 @@ needs_rates player::calc_needs_rates()
 
     if( has_activity( activity_id( "ACT_TREE_COMMUNION" ) ) ) {
         // Much of the body's needs are taken care of by the trees.
-        rates.hunger *= 0.5f;
-        rates.thirst *= 0.5f;
-        rates.fatigue *= 0.5f;
+        // Hair Roots dont provide any bodily needs.
+        if( has_trait( trait_ROOTS2 ) || has_trait( trait_ROOTS3 ) ) {
+            rates.hunger *= 0.5f;
+            rates.thirst *= 0.5f;
+            rates.fatigue *= 0.5f;
+        }
     }
 
     if( is_npc() ) {
@@ -4613,7 +4656,7 @@ void player::update_needs( int rate_multiplier )
     // Don't increase fatigue if sleeping or trying to sleep or if we're at the cap.
     if( get_fatigue() < 1050 && !asleep && !debug_ls ) {
         if( rates.fatigue > 0.0f ) {
-            int fatigue_roll = divide_roll_remainder( rates.fatigue * rate_multiplier, 1.0 );
+            int fatigue_roll = roll_remainder( rates.fatigue * rate_multiplier );
             mod_fatigue( fatigue_roll );
 
             if( get_option< bool >( "SLEEP_DEPRIVATION" ) ) {
@@ -4635,7 +4678,7 @@ void player::update_needs( int rate_multiplier )
         }
     } else if( asleep ) {
         if( rates.recovery > 0.0f ) {
-            int recovered = divide_roll_remainder( rates.recovery * rate_multiplier, 1.0 );
+            int recovered = roll_remainder( rates.recovery * rate_multiplier );
             if( get_fatigue() - recovered < -20 ) {
                 // Should be wake up, but that could prevent some retroactive regeneration
                 sleep.set_duration( 1_turns );
@@ -6481,7 +6524,7 @@ void player::suffer()
         } else if( has_effect( effect_shakes ) && one_in( 75 ) ) {
             moves -= 10;
             add_msg_player_or_npc( m_warning, _( "Your shaking legs make you stumble." ),
-                                   _( "<npcname stumbles." ) );
+                                   _( "<npcname> stumbles." ) );
             if( !has_effect( effect_downed ) && one_in( 10 ) ) {
                 add_msg_player_or_npc( m_bad, _( "You fall over!" ), _( "<npcname> falls over!" ) );
                 add_effect( effect_downed, rng( 3_turns, 10_turns ) );
@@ -6687,11 +6730,11 @@ void player::mend( int rate_multiplier )
 // sets default stomach contents when starting the game
 void player::initialize_stomach_contents()
 {
-    stomach = stomach_contents( 4000_ml );
+    stomach = stomach_contents( 2500_ml );
     guts = stomach_contents( 24000_ml );
     guts.set_calories( 300 );
     stomach.set_calories( 800 );
-    stomach.mod_contents( 750_ml );
+    stomach.mod_contents( 475_ml );
 }
 
 void player::vomit()
@@ -6945,8 +6988,7 @@ void player::update_body_wetness( const w_point &weather )
     // A modifier on drying time
     double delay = 1.0;
     // Weather slows down drying
-    delay -= ( weather.temperature - 65 ) / 100.0;
-    delay += ( weather.humidity - 66 ) / 100.0;
+    delay += ( ( weather.humidity - 66 ) - ( weather.temperature - 65 ) ) / 100;
     delay = std::max( 0.1, delay );
     // Fur/slime retains moisture
     if( has_trait( trait_LIGHTFUR ) || has_trait( trait_FUR ) || has_trait( trait_FELINE_FUR ) ||
@@ -6955,10 +6997,10 @@ void player::update_body_wetness( const w_point &weather )
         delay = delay * 6 / 5;
     }
     if( has_trait( trait_URSINE_FUR ) || has_trait( trait_SLIMY ) ) {
-        delay = delay * 3 / 2;
+        delay *= 1.5;
     }
 
-    if( !one_in_improved( average_drying * delay / 100.0 ) ) {
+    if( !x_in_y( 1, average_drying / 100.0 * delay ) ) {
         // No drying this turn
         return;
     }
@@ -7533,7 +7575,18 @@ bool player::consume_med( item &target )
 
     // TODO: Get the target it was used on
     // Otherwise injecting someone will give us addictions etc.
-    consume_effects( target );
+    if( target.has_flag( "NO_INGEST" ) ) {
+        const auto &comest = *target.get_comestible();
+        // Assume that parenteral meds don't spoil, so don't apply rot
+        modify_health( comest );
+        modify_stimulation( comest );
+        modify_addiction( comest );
+        modify_morale( target );
+    } else {
+        // Take by mouth
+        consume_effects( target );
+    }
+
     mod_moves( -250 );
     target.charges -= amount_used;
     return target.charges <= 0;
@@ -7755,7 +7808,7 @@ item::reload_option player::select_ammo( const item &base,
                                 sel.ammo->ammo_data();
             if( ammo ) {
                 if( ammo->ammo->prop_damage ) {
-                    row += string_format( "| *%-6d | %-7d", static_cast<int>( *ammo->ammo->prop_damage ),
+                    row += string_format( "| *%-6.2f | %-7d", static_cast<float>( *ammo->ammo->prop_damage ),
                                           ammo->ammo->legacy_pierce );
                 } else {
                     const damage_instance &dam = ammo->ammo->damage;
@@ -12116,7 +12169,7 @@ Creature::Attitude player::attitude_to( const Creature &other ) const
     if( p != nullptr ) {
         if( p->is_enemy() ) {
             return A_HOSTILE;
-        } else if( p->is_friend() ) {
+        } else if( p->is_player_ally() ) {
             return A_FRIENDLY;
         } else {
             return A_NEUTRAL;
@@ -12218,7 +12271,7 @@ bool player::sees( const Creature &critter ) const
 {
     // This handles only the player/npc specific stuff (monsters don't have traits or bionics).
     const int dist = rl_dist( pos(), critter.pos() );
-    if( dist <= 3 && has_trait( trait_ANTENNAE ) ) {
+    if( dist <= 3 && has_active_mutation( trait_ANTENNAE ) ) {
         return true;
     }
     if( critter.digging() && has_active_bionic( bio_ground_sonar ) ) {
@@ -12863,4 +12916,67 @@ void player::do_skill_rust()
             add_msg_if_player( m_bad, _( "Your skill in %s has reduced to %d!" ), aSkill.name(), newSkill );
         }
     }
+}
+
+std::pair<std::string, nc_color> player::get_hunger_description() const
+{
+    const bool calorie_deficit = get_stored_kcal() + guts.get_calories() + guts.get_calories_absorbed()
+                                 < get_healthy_kcal();
+    const units::volume contains = stomach.contains();
+    const units::volume cap = stomach.capacity();
+    std::string hunger_string;
+    nc_color hunger_color = c_white;
+    // i ate just now!
+    const bool just_ate = stomach.time_since_ate() < 15_minutes;
+    // i ate a meal recently enough that i shouldn't need another meal
+    const bool recently_ate = stomach.time_since_ate() < 3_hours;
+    if( calorie_deficit ) {
+        if( contains >= cap ) {
+            hunger_string = _( "Engorged" );
+            hunger_color = c_green;
+        } else if( contains > cap * 3 / 4 ) {
+            hunger_string = _( "Sated" );
+            hunger_color = c_green;
+        } else if( just_ate && contains > cap / 2 ) {
+            hunger_string = _( "Full" );
+            hunger_color = c_green;
+        } else if( just_ate ) {
+            hunger_string = _( "Hungry" );
+            hunger_color = c_yellow;
+        } else if( recently_ate ) {
+            hunger_string = _( "Very Hungry" );
+            hunger_color = c_yellow;
+        } else if( get_kcal_percent() < 0.2f ) {
+            hunger_string = _( "Starving!" );
+            hunger_color = c_red;
+        } else if( get_kcal_percent() < 0.5f ) {
+            hunger_string = _( "Near starving" );
+            hunger_color = c_red;
+        } else {
+            hunger_string = _( "Famished" );
+            hunger_color = c_light_red;
+        }
+    } else {
+        if( contains >= cap * 5 / 6 ) {
+            hunger_string = _( "Engorged" );
+            hunger_color = c_green;
+        } else if( contains > cap * 11 / 20 ) {
+            hunger_string = _( "Sated" );
+            hunger_color = c_green;
+        } else if( recently_ate && contains > cap * 3 / 8 ) {
+            hunger_string = _( "Full" );
+            hunger_color = c_green;
+        } else if( ( stomach.time_since_ate() > 90_minutes && contains < cap / 8 ) || ( just_ate &&
+                   contains > 0_ml && contains < cap * 3 / 8 ) ) {
+            hunger_string = _( "Peckish" );
+            hunger_color = c_dark_gray;
+        } else if( !just_ate && ( recently_ate || contains > 0_ml ) ) {
+            hunger_string = "";
+        } else {
+            hunger_string = _( "Hungry" );
+            hunger_color = c_yellow;
+        }
+    }
+
+    return std::make_pair( hunger_string, hunger_color );
 }

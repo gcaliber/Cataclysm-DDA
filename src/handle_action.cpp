@@ -17,6 +17,7 @@
 #include "construction.h"
 #include "cursesdef.h"
 #include "debug.h"
+#include "debug_menu.h"
 #include "faction.h"
 #include "field.h"
 #include "game_constants.h"
@@ -1214,6 +1215,33 @@ static void fire()
     }
 }
 
+static void open_movement_mode_menu()
+{
+    player &u = g->u;
+    uilist as_m;
+
+    as_m.text = _( "Change to which movement mode?" );
+
+    as_m.entries.emplace_back( 0, true, 'w', _( "Walk" ) );
+    as_m.entries.emplace_back( 1, true, 'r', _( "Run" ) );
+    as_m.entries.emplace_back( 2, true, 'c', _( "Crouch" ) );
+    as_m.query();
+
+    switch( as_m.ret ) {
+        case 0:
+            u.set_movement_mode( "walk" );
+            break;
+        case 1:
+            u.set_movement_mode( "run" );
+            break;
+        case 2:
+            u.set_movement_mode( "crouch" );
+            break;
+        default:
+            break;
+    }
+}
+
 bool game::handle_action()
 {
     std::string action;
@@ -1430,8 +1458,24 @@ bool game::handle_action()
                 }
                 break;
 
-            case ACTION_TOGGLE_MOVE:
-                u.toggle_move_mode();
+            case ACTION_CYCLE_MOVE:
+                u.cycle_move_mode();
+                break;
+
+            case ACTION_RESET_MOVE:
+                u.reset_move_mode();
+                break;
+
+            case ACTION_TOGGLE_RUN:
+                u.toggle_run_mode();
+                break;
+
+            case ACTION_TOGGLE_CROUCH:
+                u.toggle_crouch_mode();
+                break;
+
+            case ACTION_OPEN_MOVEMENT:
+                open_movement_mode_menu();
                 break;
 
             case ACTION_MOVE_N:
@@ -1581,7 +1625,13 @@ bool game::handle_action()
                 break;
 
             case ACTION_PICKUP:
-                Pickup::pick_up( u.pos(), 1 );
+                if( u.has_active_mutation( trait_SHELL2 ) ) {
+                    add_msg( m_info, _( "You can't pick anything up while you're in your shell." ) );
+                } else if( mouse_target ) {
+                    pickup( *mouse_target );
+                } else {
+                    pickup();
+                }
                 break;
 
             case ACTION_GRAB:
@@ -1788,6 +1838,7 @@ bool game::handle_action()
                     add_msg( m_info, _( "You can't disassemble items while driving." ) );
                 } else {
                     u.disassemble();
+                    g->m.invalidate_map_cache( g->get_levz() );
                     refresh_all();
                 }
                 break;
@@ -1902,7 +1953,6 @@ bool game::handle_action()
 
             case ACTION_PL_INFO:
                 u.disp_info();
-                refresh_all();
                 break;
 
             case ACTION_MAP:
@@ -1929,7 +1979,6 @@ bool game::handle_action()
 
             case ACTION_FACTIONS:
                 new_faction_manager_ptr->display();
-                refresh_all();
                 break;
 
             case ACTION_MORALE:
@@ -1954,7 +2003,6 @@ bool game::handle_action()
 
             case ACTION_OPTIONS:
                 get_options().show( true );
-                refresh_all();
                 g->init_ui( true );
                 break;
 
@@ -1982,8 +2030,7 @@ bool game::handle_action()
                 if( MAP_SHARING::isCompetitive() && !MAP_SHARING::isDebugger() ) {
                     break;    //don't do anything when sharing and not debugger
                 }
-                debug();
-                refresh_all();
+                debug_menu::debug();
                 break;
 
             case ACTION_TOGGLE_FULLSCREEN:

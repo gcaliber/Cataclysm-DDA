@@ -312,6 +312,14 @@ std::unique_ptr<vehicle> map::detach_vehicle( vehicle *veh )
         veh->smz = abs_sub.z;
     }
 
+    // Unboard all passengers before detaching
+    for( auto const &part : veh->get_avail_parts( VPFLAG_BOARDABLE ) ) {
+        player *passenger = part.get_passenger();
+        if( passenger ) {
+            unboard_vehicle( part.pos() );
+        }
+    }
+
     submap *const current_submap = get_submap_at_grid( {veh->smx, veh->smy, veh->smz} );
     auto &ch = get_cache( veh->smz );
     for( size_t i = 0; i < current_submap->vehicles.size(); i++ ) {
@@ -2523,6 +2531,16 @@ bool map::is_divable( const int x, const int y ) const
     return has_flag( "SWIMMABLE", x, y ) && has_flag( TFLAG_DEEP_WATER, x, y );
 }
 
+bool map::is_water_shallow_current( const int x, const int y ) const
+{
+    return has_flag( "CURRENT", x, y ) && !has_flag( TFLAG_DEEP_WATER, x, y );
+}
+
+bool map::is_water_shallow_current( const tripoint &p ) const
+{
+    return has_flag( "CURRENT", p ) && !has_flag( TFLAG_DEEP_WATER, p );
+}
+
 bool map::is_divable( const tripoint &p ) const
 {
     return has_flag( "SWIMMABLE", p ) && has_flag( TFLAG_DEEP_WATER, p );
@@ -4317,9 +4335,9 @@ item &map::add_item( const tripoint &p, item new_item )
     point l;
     submap *const current_submap = get_submap_at( p, l );
 
-    // Process foods when they are added to the map, here instead of add_item_at()
-    // to avoid double processing food during active item processing.
-    if( /*new_item.needs_processing() &&*/ new_item.is_food() ) {
+    // Process foods and temperature tracked items when they are added to the map, here instead of add_item_at()
+    // to avoid double processing food and corpses during active item processing.
+    if( new_item.is_food() || new_item.has_temperature() ) {
         new_item.process( nullptr, p, false );
     }
     return add_item_at( p, current_submap->itm[l.x][l.y].end(), new_item );
@@ -4341,7 +4359,6 @@ item &map::add_item_at( const tripoint &p,
     }
     if( new_item.has_temperature() ) {
         new_item.active = true;
-        new_item.process( nullptr, p, false );
     }
 
     point l;
@@ -4736,7 +4753,7 @@ bool map::has_items( const tripoint &p ) const
 }
 
 template <typename Stack>
-std::list<item> use_amount_stack( Stack stack, const itype_id type, long &quantity,
+std::list<item> use_amount_stack( Stack stack, const itype_id &type, long &quantity,
                                   const std::function<bool( const item & )> &filter )
 {
     std::list<item> ret;
@@ -4750,7 +4767,7 @@ std::list<item> use_amount_stack( Stack stack, const itype_id type, long &quanti
     return ret;
 }
 
-std::list<item> map::use_amount_square( const tripoint &p, const itype_id type,
+std::list<item> map::use_amount_square( const tripoint &p, const itype_id &type,
                                         long &quantity, const std::function<bool( const item & )> &filter )
 {
     std::list<item> ret;
@@ -5745,8 +5762,11 @@ void map::drawsq( const catacurses::window &w, player &u, const tripoint &p, con
                   const bool show_items_arg, const tripoint &view_center,
                   const bool low_light, const bool bright_light, const bool inorder ) const
 {
-    // We only need to draw anything if we're not in tiles mode.
+    // If we are in tiles mode, the only thing we want to potentially draw is a highlight
     if( is_draw_tiles_mode() ) {
+        if( invert_arg ) {
+            g->draw_highlight( p );
+        }
         return;
     }
 
@@ -6682,11 +6702,12 @@ void map::loadn( const int gridx, const int gridy, const int gridz, const bool u
 
 bool map::has_rotten_away( item &itm, const tripoint &pnt ) const
 {
-    if( itm.is_corpse() ) {
-        itm.calc_rot( pnt );
+    int temp = g->get_temperature( pnt );
+    if( itm.is_corpse() && itm.goes_bad() ) {
+        itm.process_temperature_rot( temp, 1, pnt, nullptr );
         return itm.get_rot() > 10_days && !itm.can_revive();
     } else if( itm.goes_bad() ) {
-        itm.calc_rot( pnt );
+        itm.process_temperature_rot( temp, 1, pnt, nullptr );
         return itm.has_rotten_away();
     } else if( itm.type->container && itm.type->container->preserves ) {
         // Containers like tin cans preserves all items inside, they do not rot at all.
@@ -6694,7 +6715,9 @@ bool map::has_rotten_away( item &itm, const tripoint &pnt ) const
     } else if( itm.type->container && itm.type->container->seals ) {
         // Items inside rot but do not vanish as the container seals them in.
         for( auto &c : itm.contents ) {
-            c.calc_rot( pnt );
+            if( c.goes_bad() ) {
+                c.process_temperature_rot( temp, 1, pnt, nullptr );
+            }
         }
         return false;
     } else {
@@ -7353,13 +7376,13 @@ const std::vector<tripoint> &map::trap_locations( const trap_id type ) const
 
 bool map::inbounds( const tripoint &p ) const
 {
-    constexpr tripoint map_boundary_min( 0, 0, -OVERMAP_DEPTH );
-    constexpr tripoint map_boundary_max( MAPSIZE_Y, MAPSIZE_X, OVERMAP_HEIGHT );
-    constexpr tripoint map_clearance_min( tripoint_zero );
-    constexpr tripoint map_clearance_max( 1, 1, 0 );
+    static constexpr tripoint map_boundary_min( 0, 0, -OVERMAP_DEPTH );
+    static constexpr tripoint map_boundary_max( MAPSIZE_Y, MAPSIZE_X, OVERMAP_HEIGHT );
+    static constexpr tripoint map_clearance_min( tripoint_zero );
+    static constexpr tripoint map_clearance_max( 1, 1, 0 );
 
-    constexpr box map_boundaries( map_boundary_min, map_boundary_max );
-    constexpr box map_clearance( map_clearance_min, map_clearance_max );
+    static constexpr box map_boundaries( map_boundary_min, map_boundary_max );
+    static constexpr box map_clearance( map_clearance_min, map_clearance_max );
 
     return generic_inbounds( p, map_boundaries, map_clearance );
 }
@@ -7683,6 +7706,13 @@ void map::build_map_cache( const int zlev, bool skip_lightmap )
                 floor_cache[px][py] = true;
             }
         }
+    }
+
+    // The tile player is standing on should always be transparent
+    const tripoint &p = g->u.pos();
+    if( ( has_furn( p ) && !furn( p ).obj().transparent ) || !ter( p ).obj().transparent ) {
+        get_cache( p.z ).transparency_cache[p.x][p.y] = LIGHT_TRANSPARENCY_CLEAR;
+        set_transparency_cache_dirty( p.z );
     }
 
     build_seen_cache( g->u.pos(), zlev );
@@ -8162,10 +8192,10 @@ tripoint_range map::points_in_radius( const tripoint &center, size_t radius, siz
 {
     const int minx = std::max<int>( 0, center.x - radius );
     const int miny = std::max<int>( 0, center.y - radius );
-    const int minz = std::max<int>( -OVERMAP_DEPTH, center.z - radiusz );
+    const int minz = clamp<int>( center.z - radiusz, -OVERMAP_DEPTH, OVERMAP_HEIGHT );
     const int maxx = std::min<int>( SEEX * my_MAPSIZE - 1, center.x + radius );
     const int maxy = std::min<int>( SEEX * my_MAPSIZE - 1, center.y + radius );
-    const int maxz = std::min<int>( OVERMAP_HEIGHT, center.z + radiusz );
+    const int maxz = clamp<int>( center.z + radiusz, -OVERMAP_DEPTH, OVERMAP_HEIGHT );
     return tripoint_range( tripoint( minx, miny, minz ), tripoint( maxx, maxy, maxz ) );
 }
 
