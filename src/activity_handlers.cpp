@@ -78,6 +78,7 @@
 #include "string_id.h"
 #include "units.h"
 #include "type_id.h"
+#include "event.h"
 
 class npc;
 
@@ -204,7 +205,9 @@ activity_handlers::finish_functions = {
     { activity_id( "ACT_SHAVE" ), shaving_finish },
     { activity_id( "ACT_HAIRCUT" ), haircut_finish },
     { activity_id( "ACT_UNLOAD_MAG" ), unload_mag_finish },
-    { activity_id( "ACT_ROBOT_CONTROL" ), robot_control_finish }
+    { activity_id( "ACT_ROBOT_CONTROL" ), robot_control_finish },
+    { activity_id( "ACT_HACK_DOOR" ), hack_door_finish },
+    { activity_id( "ACT_HACK_SAFE" ), hack_safe_finish }
 };
 
 void messages_in_process( const player_activity &act, const player &p )
@@ -1313,7 +1316,7 @@ void activity_handlers::fill_liquid_do_turn( player_activity *act, player *p )
         item liquid;
         const auto source_type = static_cast<liquid_source_type>( act_ref.values.at( 0 ) );
         int part_num = -1;
-        long veh_charges = 0;
+        int veh_charges = 0;
         switch( source_type ) {
             case LST_VEHICLE:
                 source_veh = veh_pointer_or_null( g->m.veh_at( source_pos ) );
@@ -1349,11 +1352,12 @@ void activity_handlers::fill_liquid_do_turn( player_activity *act, player *p )
         }
 
         static const auto volume_per_turn = units::from_liter( 4 );
-        const long charges_per_turn = std::max( 1l, liquid.charges_per_volume( volume_per_turn ) );
+        const int charges_per_turn = std::max( 1, liquid.charges_per_volume( volume_per_turn ) );
         liquid.charges = std::min( charges_per_turn, liquid.charges );
-        const long original_charges = liquid.charges;
+        const int original_charges = liquid.charges;
         if( liquid.has_temperature() && liquid.specific_energy < 0 ) {
-            liquid.set_item_temperature( std::max( temp_to_kelvin( g->get_temperature( p->pos() ) ), 277.15 ) );
+            liquid.set_item_temperature( std::max( temp_to_kelvin( g->weather.get_temperature( p->pos() ) ),
+                                                   277.15 ) );
         }
 
         // 2. Transfer charges.
@@ -1382,7 +1386,7 @@ void activity_handlers::fill_liquid_do_turn( player_activity *act, player *p )
                 break;
         }
 
-        const long removed_charges = original_charges - liquid.charges;
+        const int removed_charges = original_charges - liquid.charges;
         if( removed_charges == 0 ) {
             // Nothing has been transferred, target must be full.
             act_ref.set_to_null();
@@ -1472,7 +1476,7 @@ void activity_handlers::firstaid_finish( player_activity *act, player *p )
     // TODO: Store the patient somehow, retrieve here
     player &patient = *p;
     const hp_part healed = static_cast<hp_part>( act->values[0] );
-    const long charges_consumed = actor->finish_using( *p, patient, *used_tool, healed );
+    const int charges_consumed = actor->finish_using( *p, patient, *used_tool, healed );
     p->consume_charges( it, charges_consumed );
 
     // Erase activity and values.
@@ -1786,7 +1790,7 @@ void activity_handlers::pickaxe_finish( player_activity *act, player *p )
     }
     p->add_msg_if_player( m_good, _( "You finish digging." ) );
     g->m.destroy( pos, true );
-    it.charges = std::max( static_cast<long>( 0 ), it.charges - it.type->charges_to_use() );
+    it.charges = std::max( 0, it.charges - it.type->charges_to_use() );
     if( it.charges == 0 && it.destroyed_at_zero_charges() ) {
         p->i_rem( &it );
     }
@@ -2161,7 +2165,7 @@ void activity_handlers::oxytorch_do_turn( player_activity *act, player *p )
 
     item &it = p->i_at( act->position );
     // act->values[0] is the number of charges yet to be consumed
-    const long charges_used = std::min( static_cast<long>( act->values[0] ), it.ammo_required() );
+    const int charges_used = std::min( act->values[0], it.ammo_required() );
 
     it.ammo_consume( charges_used, p->pos() );
     act->values[0] -= static_cast<int>( charges_used );
@@ -2826,6 +2830,8 @@ void activity_handlers::craft_do_turn( player_activity *act, player *p )
                 p->last_craft->execute( loc );
             }
         }
+    } else if( craft->item_counter >= craft->get_next_failure_point() ) {
+        craft->handle_craft_failure( *p );
     }
 }
 
@@ -3066,10 +3072,9 @@ void activity_handlers::dig_finish( player_activity *act, player *p )
             g->m.spawn_item( pos, "bone_human", rng( 5, 15 ) );
             g->m.furn_set( pos, f_coffin_c );
         }
-        std::vector<item *> dropped;
+        std::vector<item *> dropped = g->m.place_items( "allclothes", 50, pos, pos, false, calendar::turn );
         g->m.place_items( "grave", 25, pos, pos, false, calendar::turn );
         g->m.place_items( "jewelry_front", 20, pos, pos, false, calendar::turn );
-        dropped = g->m.place_items( "allclothes", 50, pos, pos, false, calendar::turn );
         for( const auto &it : dropped ) {
             if( it->is_armor() ) {
                 it->item_tags.insert( "FILTHY" );
@@ -3177,7 +3182,7 @@ void activity_handlers::haircut_finish( player_activity *act, player *p )
 
 void activity_handlers::unload_mag_finish( player_activity *act, player *p )
 {
-    long qty = 0;
+    int qty = 0;
     item &it = *act->targets[ 0 ];
 
     // remove the ammo leads in the belt
@@ -3281,7 +3286,7 @@ static void perform_zone_activity_turn( player *p,
 void activity_handlers::harvest_plot_do_turn( player_activity *, player *p )
 {
     const auto reject_tile = [p]( const tripoint & tile ) {
-        return !p->sees( tile ) || g->m.furn( tile ) != f_plant_harvest;
+        return !p->sees( tile ) || !g->m.has_flag_furn( "GROWTH_HARVEST", tile );
     };
     perform_zone_activity_turn( p,
                                 zone_type_id( "FARM_PLOT" ),
@@ -3294,8 +3299,7 @@ void activity_handlers::harvest_plot_do_turn( player_activity *, player *p )
 void activity_handlers::till_plot_do_turn( player_activity *, player *p )
 {
     const auto reject_tile = [p]( const tripoint & tile ) {
-        return !p->sees( tile ) || !g->m.has_flag( "PLOWABLE", tile ) || g->m.has_flag( "PLANT", tile ) ||
-               g->m.ter( tile ) == t_dirtmound;
+        return !p->sees( tile ) || !g->m.has_flag( "PLOWABLE", tile ) || g->m.has_furn( tile );
     };
 
     const auto dig = []( player & p, const tripoint & tile_loc ) {
@@ -3388,7 +3392,8 @@ void activity_handlers::plant_plot_do_turn( player_activity *, player *p )
 
     // cleanup unwanted tiles (local coords)
     const auto reject_tiles = [&]( const tripoint & tile ) {
-        if( !p->sees( tile ) || g->m.ter( tile ) != t_dirtmound || !g->m.i_at( tile ).empty() ) {
+        if( !p->sees( tile ) || !g->m.has_flag_ter_or_furn( "PLANTABLE", tile ) ||
+            g->m.has_items( tile ) ) {
             return true;
         }
 
@@ -3547,5 +3552,105 @@ void activity_handlers::tree_communion_do_turn( player_activity *act, player *p 
         q.pop();
     }
     p->add_msg_if_player( m_info, _( "The trees have shown you what they will." ) );
+    act->set_to_null();
+}
+
+hack_result try_hack( player &p )
+{
+    if( p.has_trait( trait_id( "ILLITERATE" ) ) ) {
+        add_msg( _( "You can't read anything on the screen." ) );
+        return HACK_UNABLE;
+    }
+    bool using_electrohack = p.has_charges( "electrohack", 25 ) &&
+                             query_yn( _( "Use electrohack?" ) );
+    bool using_fingerhack = !using_electrohack && p.has_bionic( bionic_id( "bio_fingerhack" ) ) &&
+                            p.power_level > 24 && query_yn( _( "Use fingerhack?" ) );
+
+    if( !( using_electrohack || using_fingerhack ) ) {
+        add_msg( _( "You need a hacking tool for that." ) );
+        return HACK_UNABLE;
+    }
+
+    ///\EFFECT_COMPUTER increases success chance of hacking
+    int player_computer_skill_level = p.get_skill_level( skill_id( "computer" ) );
+    int success = rng( player_computer_skill_level / 4 - 2, player_computer_skill_level * 2 );
+    success += rng( -3, 3 );
+    if( using_fingerhack ) {
+        p.charge_power( -25 );
+        success++;
+    }
+    if( using_electrohack ) {
+        p.use_charges( "electrohack", 25 );
+        success++;
+    }
+
+    // odds go up with int>8, down with int<8
+    // 4 int stat is worth 1 computer skill here
+    ///\EFFECT_INT increases success chance of hacking
+    success += rng( 0, static_cast<int>( ( p.int_cur - 8 ) / 2 ) );
+
+    if( success < 0 ) {
+        add_msg( _( "You cause a short circuit!" ) );
+        if( success <= -5 ) {
+            if( using_electrohack ) {
+                add_msg( m_bad, _( "Your electrohack is ruined!" ) );
+                p.use_amount( "electrohack", 1 );
+            } else {
+                add_msg( m_bad, _( "Your power is drained!" ) );
+                p.charge_power( -rng( 0, p.power_level ) );
+            }
+        }
+        return HACK_FAIL;
+    } else if( success < 6 ) {
+        add_msg( _( "Nothing happens." ) );
+        return HACK_NOTHING;
+    } else {
+        return HACK_SUCCESS;
+    }
+}
+
+void activity_handlers::hack_door_finish( player_activity *act, player *p )
+{
+    hack_result result = try_hack( *p );
+    if( result == HACK_UNABLE ) {
+        act->set_to_null();
+        return;
+    } else if( result == HACK_SUCCESS ) {
+        add_msg( _( "You activate the panel!" ) );
+        add_msg( m_good, _( "The nearby doors slide into the floor." ) );
+        g->m.ter_set( act->placement, t_card_reader_broken );
+        for( const tripoint &tmp : g->m.points_in_radius( ( act->placement ), 3 ) ) {
+            if( g->m.ter( tmp ) == t_door_metal_locked ) {
+                g->m.ter_set( tmp, t_floor );
+            }
+        }
+    }
+
+    p->practice( skill_id( "computer" ), 20 );
+    act->set_to_null();
+}
+
+void activity_handlers::hack_safe_finish( player_activity *act, player *p )
+{
+    hack_result result = try_hack( *p );
+    if( result == HACK_UNABLE ) {
+        act->set_to_null();
+        return;
+    } else if( result == HACK_FAIL ) {
+        act->set_to_null();
+
+        p->add_memorial_log( pgettext( "memorial_male", "Set off an alarm." ),
+                             pgettext( "memorial_female", "Set off an alarm." ) );
+        sounds::sound( p->pos(), 60, sounds::sound_t::music, _( "an alarm sound!" ), true, "environment",
+                       "alarm" );
+        if( act->placement.z > 0 && !g->events.queued( EVENT_WANTED ) ) {
+            g->events.add( EVENT_WANTED, calendar::turn + 30_minutes, 0, p->global_sm_location() );
+        }
+    } else if( result == HACK_SUCCESS ) {
+        add_msg( m_good, _( "The door on the safe swings open." ) );
+        g->m.furn_set( act->placement, furn_str_id( "f_safe_o" ) );
+    }
+
+    p->practice( skill_id( "computer" ), 20 );
     act->set_to_null();
 }

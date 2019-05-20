@@ -183,7 +183,7 @@ std::vector<item> item::magazine_convert()
         qty += charges - type->gun->clip; // excess ammo from magazine extensions
 
         // limit ammo to base capacity and return any excess as a new item
-        charges = std::min( charges, static_cast<long>( type->gun->clip ) );
+        charges = std::min( charges, type->gun->clip );
         if( qty > 0 ) {
             res.emplace_back( ammo_current() != "null" ? ammo_current() : ammo_type()->default_ammotype(),
                               calendar::turn, qty );
@@ -271,8 +271,7 @@ void player_activity::deserialize( JsonIn &jsin )
     int tmppos = 0;
     if( !data.read( "type", tmptype ) ) {
         // Then it's a legacy save.
-        int tmp_type_legacy;
-        data.read( "type", tmp_type_legacy );
+        int tmp_type_legacy = data.get_int( "type" );
         deserialize_legacy_type( tmp_type_legacy, type );
     } else {
         type = activity_id( tmptype );
@@ -1050,6 +1049,8 @@ void npc_follower_rules::serialize( JsonOut &json ) const
     json.start_object();
     json.member( "engagement", static_cast<int>( engagement ) );
     json.member( "aim", static_cast<int>( aim ) );
+    json.member( "cbm_reserve", static_cast<int>( cbm_reserve ) );
+    json.member( "cbm_recharge", static_cast<int>( cbm_recharge ) );
 
     // serialize the flags so they can be changed between save games
     for( const auto &rule : ally_rule_strs ) {
@@ -1076,6 +1077,12 @@ void npc_follower_rules::deserialize( JsonIn &jsin )
     int tmpaim = 0;
     data.read( "aim", tmpaim );
     aim = static_cast<aim_rule>( tmpaim );
+    int tmpreserve = 50;
+    data.read( "cbm_reserve", tmpreserve );
+    cbm_reserve = static_cast<cbm_reserve_rule>( tmpreserve );
+    int tmprecharge = 50;
+    data.read( "cbm_recharge", tmprecharge );
+    cbm_recharge = static_cast<cbm_recharge_rule>( tmprecharge );
 
     // deserialize the flags so they can be changed between save games
     for( const auto &rule : ally_rule_strs ) {
@@ -1113,19 +1120,19 @@ void npc_follower_rules::deserialize( JsonIn &jsin )
             set_flag( ally_rule::follow_close );
         } else {
             clear_flag( ally_rule::follow_close );
-        };
+        }
         data.read( "override_enable_avoid_combat", tmpflag );
         if( tmpflag ) {
             enable_override( ally_rule::follow_close );
         } else {
             disable_override( ally_rule::follow_close );
-        };
+        }
         data.read( "override_avoid_combat", tmpflag );
         if( tmpflag ) {
             set_override( ally_rule::follow_close );
         } else {
             clear_override( ally_rule::follow_close );
-        };
+        }
     }
 
     data.read( "pickup_whitelist", *pickup_whitelist );
@@ -1440,6 +1447,10 @@ void npc::load( JsonObject &data )
         data.read( "misc_rules", rules );
         data.read( "combat_rules", rules );
     }
+    real_weapon = item( "null", 0 );
+    data.read( "real_weapon", real_weapon );
+    cbm_weapon_index = -1;
+    data.read( "cbm_weapon_index", cbm_weapon_index );
 
     if( !data.read( "last_updated", last_updated ) ) {
         last_updated = calendar::turn;
@@ -1505,6 +1516,11 @@ void npc::store( JsonOut &json ) const
     json.member( "op_of_u", op_of_u );
     json.member( "chatbin", chatbin );
     json.member( "rules", rules );
+
+    if( !real_weapon.is_null() ) {
+        json.member( "real_weapon", real_weapon ); // also saves contents
+    }
+    json.member( "cbm_weapon_index", cbm_weapon_index );
 
     json.member( "comp_mission_id", comp_mission.mission_id );
     json.member( "comp_mission_pt", comp_mission.position );
@@ -1916,8 +1932,8 @@ void item::io( Archive &archive )
     }, io::required_tag() );
 
     // normalize legacy saves to always have charges >= 0
-    archive.io( "charges", charges, 0L );
-    charges = std::max( charges, 0L );
+    archive.io( "charges", charges, 0 );
+    charges = std::max( charges, 0 );
 
     int cur_phase = static_cast<int>( current_phase );
     archive.io( "burnt", burnt, 0 );

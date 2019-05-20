@@ -698,6 +698,11 @@ bool vehicle::fold_up()
 
     add_msg( _( "You painstakingly pack the %s into a portable configuration." ), name );
 
+    if( g->u.get_grab_type() != OBJECT_NONE ) {
+        g->u.grab( OBJECT_NONE );
+        add_msg( _( "You let go of %s as you fold it." ), name );
+    }
+
     std::string itype_id = "folding_bicycle";
     for( const auto &elem : tags ) {
         if( elem.compare( 0, 12, "convertible:" ) == 0 ) {
@@ -760,7 +765,7 @@ double vehicle::engine_cold_factor( const int e ) const
         return 0.0;
     }
 
-    int eff_temp = g->get_temperature( g->u.pos() );
+    int eff_temp = g->weather.get_temperature( g->u.pos() );
     if( !parts[ engines[ e ] ].faults().count( fault_glowplug ) ) {
         eff_temp = std::min( eff_temp, 20 );
     }
@@ -1224,9 +1229,8 @@ void vehicle::operate_scoop()
                                               that_item_there->volume() / units::legacy_volume_factor * 2 + 10 ),
                                sounds::sound_t::combat, _( "BEEEThump" ), false, "vehicle", "scoop_thump" );
             }
-            const int battery_deficit = discharge_battery( that_item_there->weight() / 1_gram *
-                                        -part_epower_w( scoop ) / rng( 8, 15 ) );
-            if( battery_deficit == 0 && add_item( scoop, *that_item_there ) ) {
+            //This attempts to add the item to the scoop inventory and if successful, removes it from the map.
+            if( add_item( scoop, *that_item_there ) ) {
                 g->m.i_rem( position, itemdex );
             } else {
                 break;
