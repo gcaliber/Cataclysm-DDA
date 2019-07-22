@@ -4,6 +4,7 @@
 #include <numeric>
 #include <memory>
 
+#include "avatar.h"
 #include "game.h"
 #include "gun_mode.h"
 #include "item.h"
@@ -21,6 +22,7 @@
 #include "creature.h"
 #include "debug.h"
 #include "optional.h"
+#include "enums.h"
 
 static const itype_id fuel_type_battery( "battery" );
 const efftype_id effect_on_roof( "on_roof" );
@@ -148,7 +150,7 @@ std::set<itype_id> turret_data::ammo_options() const
     } else {
         for( const auto &e : veh->fuels_left() ) {
             const itype *fuel = item::find_type( e.first );
-            if( fuel->ammo && fuel->ammo->type.count( part->base.ammo_type() ) &&
+            if( fuel->ammo && part->base.ammo_types().count( fuel->ammo->type ) &&
                 e.second >= part->base.ammo_required() ) {
 
                 opts.insert( fuel->get_id() );
@@ -482,7 +484,7 @@ int vehicle::turrets_aim_single( vehicle_part *tur_part )
         return shots;
     }
 
-    if( chosen !=  nullptr ) {
+    if( chosen != nullptr ) {
         shots = turrets_aim_and_fire( false, false, chosen );
     }
 

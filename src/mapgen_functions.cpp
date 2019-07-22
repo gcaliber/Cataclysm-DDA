@@ -1,11 +1,9 @@
 #include "mapgen_functions.h"
 
 #include <cstdlib>
-#include <cmath>
 #include <algorithm>
 #include <array>
 #include <iterator>
-#include <random>
 #include <initializer_list>
 #include <map>
 #include <ostream>
@@ -28,17 +26,17 @@
 #include "overmap.h"
 #include "trap.h"
 #include "vehicle_group.h"
-#include "vpart_position.h"
 #include "calendar.h"
 #include "game_constants.h"
 #include "regional_settings.h"
 #include "rng.h"
 #include "string_id.h"
 #include "int_id.h"
+#include "enums.h"
 
 class npc_template;
 
-#define dbg(x) DebugLog((DebugLevel)(x),D_MAP_GEN) << __FILE__ << ":" << __LINE__ << ": "
+#define dbg(x) DebugLog((x),D_MAP_GEN) << __FILE__ << ":" << __LINE__ << ": "
 
 const mtype_id mon_ant_larva( "mon_ant_larva" );
 const mtype_id mon_ant_queen( "mon_ant_queen" );
@@ -105,7 +103,6 @@ building_gen_pointer get_mapgen_cfunction( const std::string &ident )
             { "null",             &mapgen_null },
             { "crater",           &mapgen_crater },
             { "field",            &mapgen_field },
-            { "dirtlot",          &mapgen_dirtlot },
             { "forest",           &mapgen_forest },
             { "forest_trail_straight",    &mapgen_forest_trail_straight },
             { "forest_trail_curved",      &mapgen_forest_trail_curved },
@@ -281,7 +278,7 @@ void mapgendata::fill_groundcover()
 {
     m.draw_fill_background( this->default_groundcover );
 }
-bool mapgendata::is_groundcover( const ter_id iid ) const
+bool mapgendata::is_groundcover( const ter_id &iid ) const
 {
     for( const auto &pr : default_groundcover ) {
         if( pr.obj == iid ) {
@@ -375,7 +372,7 @@ void mapgen_crater( map *m, oter_id, mapgendata dat, const time_point &turn, flo
 }
 
 // TODO: make void map::ter_or_furn_set(const int x, const int y, const ter_furn_id & tfid);
-void ter_or_furn_set( map *m, const int x, const int y, const ter_furn_id &tfid )
+static void ter_or_furn_set( map *m, const int x, const int y, const ter_furn_id &tfid )
 {
     if( tfid.ter != t_null ) {
         m->ter_set( x, y, tfid.ter );
@@ -417,28 +414,6 @@ void mapgen_field( map *m, oter_id, mapgendata dat, const time_point &turn, floa
 
     m->place_items( "field", 60, 0, 0, SEEX * 2 - 1, SEEY * 2 - 1, true,
                     turn ); // FIXME: take 'rock' out and add as regional biome setting
-}
-
-void mapgen_dirtlot( map *m, oter_id, mapgendata, const time_point &, float )
-{
-    for( int i = 0; i < SEEX * 2; i++ ) {
-        for( int j = 0; j < SEEY * 2; j++ ) {
-            m->ter_set( i, j, t_dirt );
-            if( one_in( 120 ) ) {
-                m->ter_set( i, j, t_pit_shallow );
-            } else if( one_in( 50 ) ) {
-                m->ter_set( i, j, t_grass );
-            }
-        }
-    }
-    int num_v = rng( 0, 1 ) * rng( 0, 2 ); // (0, 0, 0, 0, 1, 2) vehicles
-    for( int v = 0; v < num_v; v++ ) {
-        const tripoint vp( rng( 0, 16 ) + 4, rng( 0, 16 ) + 4, m->get_abs_sub().z );
-        int theta = rng( 0, 3 ) * 180 + one_in( 3 ) * rng( 0, 89 );
-        if( !m->veh_at( vp ) ) {
-            m->add_vehicle( vgroup_id( "dirtlot" ), vp, theta, -1, -1 );
-        }
-    }
 }
 
 void mapgen_hive( map *m, oter_id, mapgendata dat, const time_point &turn, float )
@@ -513,34 +488,34 @@ void mapgen_hive( map *m, oter_id, mapgendata dat, const time_point &turn, float
                 m->ter_set( i, j + 4, t_wax );
                 m->ter_set( i + 1, j + 4, t_wax );
 
-                if( skip1 ==  0 || skip2 ==  0 ) {
+                if( skip1 == 0 || skip2 == 0 ) {
                     m->ter_set( i - 1, j - 4, t_floor_wax );
                 }
-                if( skip1 ==  1 || skip2 ==  1 ) {
+                if( skip1 == 1 || skip2 == 1 ) {
                     m->ter_set( i, j - 4, t_floor_wax );
                 }
-                if( skip1 ==  2 || skip2 ==  2 ) {
+                if( skip1 == 2 || skip2 == 2 ) {
                     m->ter_set( i + 1, j - 4, t_floor_wax );
                 }
-                if( skip1 ==  3 || skip2 ==  3 ) {
+                if( skip1 == 3 || skip2 == 3 ) {
                     m->ter_set( i - 2, j - 3, t_floor_wax );
                 }
-                if( skip1 ==  4 || skip2 ==  4 ) {
+                if( skip1 == 4 || skip2 == 4 ) {
                     m->ter_set( i - 1, j - 3, t_floor_wax );
                 }
-                if( skip1 ==  5 || skip2 ==  5 ) {
+                if( skip1 == 5 || skip2 == 5 ) {
                     m->ter_set( i + 1, j - 3, t_floor_wax );
                 }
-                if( skip1 ==  6 || skip2 ==  6 ) {
+                if( skip1 == 6 || skip2 == 6 ) {
                     m->ter_set( i + 2, j - 3, t_floor_wax );
                 }
-                if( skip1 ==  7 || skip2 ==  7 ) {
+                if( skip1 == 7 || skip2 == 7 ) {
                     m->ter_set( i - 3, j - 2, t_floor_wax );
                 }
-                if( skip1 ==  8 || skip2 ==  8 ) {
+                if( skip1 == 8 || skip2 == 8 ) {
                     m->ter_set( i - 2, j - 2, t_floor_wax );
                 }
-                if( skip1 ==  9 || skip2 ==  9 ) {
+                if( skip1 == 9 || skip2 == 9 ) {
                     m->ter_set( i + 2, j - 2, t_floor_wax );
                 }
                 if( skip1 == 10 || skip2 == 10 ) {
@@ -786,7 +761,7 @@ void nesw_array_rotate( T *array, size_t len, size_t dist )
 }
 
 // take x/y coordinates in a map and rotate them counterclockwise around the center
-void coord_rotate_cw( int &x, int &y, int rot )
+static void coord_rotate_cw( int &x, int &y, int rot )
 {
     for( ; rot--; ) {
         int temp = y;
@@ -795,7 +770,7 @@ void coord_rotate_cw( int &x, int &y, int rot )
     }
 }
 
-bool compare_neswx( bool *a1, std::initializer_list<int> a2 )
+static bool compare_neswx( bool *a1, std::initializer_list<int> a2 )
 {
     return std::equal( std::begin( a2 ), std::end( a2 ), a1,
     []( int a, bool b ) {
@@ -2841,7 +2816,7 @@ void mapgen_basement_generic_layout( map *m, oter_id, mapgendata, const time_poi
 
 namespace furn_space
 {
-bool clear( const map &m, const tripoint &from, const tripoint &to )
+static bool clear( const map &m, const tripoint &from, const tripoint &to )
 {
     for( const auto &p : m.points_in_rectangle( from, to ) ) {
         if( m.ter( p ).obj().movecost == 0 ) {
@@ -2852,7 +2827,7 @@ bool clear( const map &m, const tripoint &from, const tripoint &to )
     return true;
 }
 
-point best_expand( const map &m, const tripoint &from, int maxx, int maxy )
+static point best_expand( const map &m, const tripoint &from, int maxx, int maxy )
 {
     if( clear( m, from, from + point( maxx, maxy ) ) ) {
         // Common case
@@ -2878,7 +2853,7 @@ point best_expand( const map &m, const tripoint &from, int maxx, int maxy )
 
     return best;
 }
-}
+} // namespace furn_space
 
 void mapgen_basement_junk( map *m, oter_id terrain_type, mapgendata dat, const time_point &turn,
                            float density )
@@ -3596,8 +3571,8 @@ void mapgen_ants_tee( map *m, oter_id terrain_type, mapgendata dat, const time_p
 
 }
 
-void mapgen_ants_generic( map *m, oter_id terrain_type, mapgendata dat, const time_point &turn,
-                          float )
+static void mapgen_ants_generic( map *m, oter_id terrain_type, mapgendata dat,
+                                 const time_point &turn, float )
 {
 
     for( int i = 0; i < SEEX * 2; i++ ) {
@@ -3626,28 +3601,32 @@ void mapgen_ants_generic( map *m, oter_id terrain_type, mapgendata dat, const ti
             }
         }
     }
-    if( connects_to( dat.north(), 2 ) || is_ot_subtype( "ants_lab", dat.north() ) ) {
+    if( connects_to( dat.north(), 2 ) ||
+        is_ot_match( "ants_lab", dat.north(), ot_match_type::contains ) ) {
         for( int i = SEEX - 2; i <= SEEX + 3; i++ ) {
             for( int j = 0; j <= SEEY; j++ ) {
                 m->ter_set( i, j, t_rock_floor );
             }
         }
     }
-    if( connects_to( dat.east(), 3 ) || is_ot_subtype( "ants_lab", dat.east() ) ) {
+    if( connects_to( dat.east(), 3 ) ||
+        is_ot_match( "ants_lab", dat.east(), ot_match_type::contains ) ) {
         for( int i = SEEX; i <= SEEX * 2 - 1; i++ ) {
             for( int j = SEEY - 2; j <= SEEY + 3; j++ ) {
                 m->ter_set( i, j, t_rock_floor );
             }
         }
     }
-    if( connects_to( dat.south(), 0 ) || is_ot_subtype( "ants_lab", dat.south() ) ) {
+    if( connects_to( dat.south(), 0 ) ||
+        is_ot_match( "ants_lab", dat.south(), ot_match_type::contains ) ) {
         for( int i = SEEX - 2; i <= SEEX + 3; i++ ) {
             for( int j = SEEY; j <= SEEY * 2 - 1; j++ ) {
                 m->ter_set( i, j, t_rock_floor );
             }
         }
     }
-    if( connects_to( dat.west(), 1 ) || is_ot_subtype( "ants_lab", dat.west() ) ) {
+    if( connects_to( dat.west(), 1 ) ||
+        is_ot_match( "ants_lab", dat.west(), ot_match_type::contains ) ) {
         for( int i = 0; i <= SEEX; i++ ) {
             for( int j = SEEY - 2; j <= SEEY + 3; j++ ) {
                 m->ter_set( i, j, t_rock_floor );
@@ -3954,7 +3933,7 @@ void mapgen_forest( map *m, oter_id terrain_type, mapgendata dat, const time_poi
     }
 
     // There is a chance of placing terrain dependent furniture, e.g. f_cattails on t_water_sh.
-    const auto set_terrain_dependent_furniture = [&current_biome_def, &m]( const ter_id tid,
+    const auto set_terrain_dependent_furniture = [&current_biome_def, &m]( const ter_id & tid,
     const int x, const int y ) {
         const auto terrain_dependent_furniture_it = current_biome_def.terrain_dependent_furniture.find(
                     tid );
@@ -4218,10 +4197,10 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
         return id != river_center && id.obj().is_river();
     };
 
-    const bool n_lake =  is_lake( dat.north() );
-    const bool e_lake =  is_lake( dat.east() );
-    const bool s_lake =  is_lake( dat.south() );
-    const bool w_lake =  is_lake( dat.west() );
+    const bool n_lake  = is_lake( dat.north() );
+    const bool e_lake  = is_lake( dat.east() );
+    const bool s_lake  = is_lake( dat.south() );
+    const bool w_lake  = is_lake( dat.west() );
     const bool nw_lake = is_lake( dat.nwest() );
     const bool ne_lake = is_lake( dat.neast() );
     const bool se_lake = is_lake( dat.seast() );
@@ -4303,10 +4282,10 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
     const int sector_length = SEEX * 2 / 3;
 
     // Define the corners of the map. These won't change.
-    const point nw_corner( 0, 0 );
-    const point ne_corner( SEEX * 2 - 1, 0 );
-    const point se_corner( SEEX * 2 - 1, SEEY * 2 - 1 );
-    const point sw_corner( 0, SEEY * 2 - 1 );
+    static constexpr point nw_corner( 0, 0 );
+    static constexpr point ne_corner( SEEX * 2 - 1, 0 );
+    static constexpr point se_corner( SEEX * 2 - 1, SEEY * 2 - 1 );
+    static constexpr point sw_corner( 0, SEEY * 2 - 1 );
 
     // Define the four points that make up our polygon that we'll later pull line segments from for
     // the actual shoreline.
@@ -4443,7 +4422,6 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
         }
     }
 
-
     // Ok, all of the fiddling with the polygon corners is done.
     // At this point we've got four points that make up four line segments that started out
     // at the map boundaries, but have subsequently been perturbed by the adjacent terrains.
@@ -4465,7 +4443,7 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
         line_segments.push_back( { sw, nw } );
     }
 
-    const rectangle map_boundaries( nw_corner, se_corner );
+    static constexpr rectangle map_boundaries( nw_corner, se_corner );
 
     // This will draw our shallow water coastline from the "from" point to the "to" point.
     // It buffers the points a bit for a thicker line. It also clears any furniture that might
@@ -4475,7 +4453,7 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
         for( auto &p : points ) {
             std::vector<point> buffered_points = closest_points_first( 1, p.x, p.y );
             for( const point &bp : buffered_points ) {
-                if( !generic_inbounds( bp, map_boundaries ) ) {
+                if( !map_boundaries.contains_inclusive( bp ) ) {
                     continue;
                 }
                 // Use t_null for now instead of t_water_sh, because sometimes our extended terrain
@@ -4526,7 +4504,7 @@ void mapgen_lake_shore( map *m, oter_id, mapgendata dat, const time_point &turn,
 
             visited.emplace( current_point );
 
-            if( !generic_inbounds( current_point, map_boundaries ) ) {
+            if( !map_boundaries.contains_inclusive( current_point ) ) {
                 continue;
             }
 
@@ -4576,13 +4554,13 @@ void mtrap_set( map *m, int x, int y, trap_id type )
     m->trap_set( actual_location, type );
 }
 
-void madd_field( map *m, int x, int y, field_id type, int density )
+void madd_field( map *m, int x, int y, field_type_id type, int intensity )
 {
     tripoint actual_location( x, y, m->get_abs_sub().z );
-    m->add_field( actual_location, type, density, 0_turns );
+    m->add_field( actual_location, type, intensity, 0_turns );
 }
 
-bool is_suitable_for_stairs( const map *const m, const tripoint &p )
+static bool is_suitable_for_stairs( const map *const m, const tripoint &p )
 {
     const ter_t &p_ter = m->ter( p ).obj();
 
@@ -4592,8 +4570,8 @@ bool is_suitable_for_stairs( const map *const m, const tripoint &p )
         m->furn( p ) == f_null;
 }
 
-void stairs_debug_log( const map *const m, const std::string &msg, const tripoint &p,
-                       DebugLevel level = D_INFO )
+static void stairs_debug_log( const map *const m, const std::string &msg, const tripoint &p,
+                              DebugLevel level = D_INFO )
 {
     const ter_t &p_ter = m->ter( p ).obj();
 

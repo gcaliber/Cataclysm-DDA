@@ -2,6 +2,7 @@
 
 #include <algorithm> //std::min
 #include <sstream>
+#include <cstddef>
 
 #include "mutation.h"
 #include "game.h"
@@ -10,12 +11,13 @@
 #include "string_formatter.h"
 #include "translations.h"
 #include "string_id.h"
+#include "enums.h"
 
 // '!' and '=' are uses as default bindings in the menu
 const invlet_wrapper
 mutation_chars( "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\"#&()*+./:;@[\\]^_{|}" );
 
-void draw_exam_window( const catacurses::window &win, const int border_y )
+static void draw_exam_window( const catacurses::window &win, const int border_y )
 {
     const int width = getmaxx( win );
     mvwputch( win, border_y, 0, BORDER_COLOR, LINE_XXXO );
@@ -28,8 +30,8 @@ const auto shortcut_desc = []( const std::string &comment, const std::string &ke
     return string_format( comment, string_format( "<color_yellow>%s</color>", keys ) );
 };
 
-void show_mutations_titlebar( const catacurses::window &window, const std::string &menu_mode,
-                              const input_context &ctxt )
+static void show_mutations_titlebar( const catacurses::window &window,
+                                     const std::string &menu_mode, const input_context &ctxt )
 {
     werase( window );
     std::ostringstream desc;
@@ -143,7 +145,7 @@ void player::power_mutations()
         // drawing the mutation starts with mutation[scroll_position]
         const int list_start_y = HEADER_LINE_Y + 2 - scroll_position;
         int max_scroll_position = HEADER_LINE_Y + 2 + mutations_count -
-                                  ( ( menu_mode == "examining" ) ? DESCRIPTION_LINE_Y : ( HEIGHT - 1 ) );
+                                  ( menu_mode == "examining" ? DESCRIPTION_LINE_Y : HEIGHT - 1 );
         if( redraw ) {
             redraw = false;
 
@@ -173,7 +175,7 @@ void player::power_mutations()
                         ( menu_mode == "examining" ? DESCRIPTION_LINE_Y : HEIGHT - 1 ) ) {
                         break;
                     }
-                    type = ( has_base_trait( passive[i] ) ? c_cyan : c_light_cyan );
+                    type = has_base_trait( passive[i] ) ? c_cyan : c_light_cyan;
                     mvwprintz( wBio, list_start_y + i, 2, type, "%c %s", td.key, md.name() );
                 }
             }
@@ -189,9 +191,9 @@ void player::power_mutations()
                         break;
                     }
                     if( td.powered ) {
-                        type = ( has_base_trait( active[i] ) ? c_green : c_light_green );
+                        type = has_base_trait( active[i] ) ? c_green : c_light_green;
                     } else {
-                        type = ( has_base_trait( active[i] ) ? c_red : c_light_red );
+                        type = has_base_trait( active[i] ) ? c_red : c_light_red;
                     }
                     // TODO: track resource(s) used and specify
                     mvwputch( wBio, list_start_y + i, second_column, type, td.key );
@@ -227,7 +229,7 @@ void player::power_mutations()
         wrefresh( wBio );
         show_mutations_titlebar( w_title, menu_mode, ctxt );
         const std::string action = ctxt.handle_input();
-        const long ch = ctxt.get_raw_input().get_first_input();
+        const int ch = ctxt.get_raw_input().get_first_input();
         if( menu_mode == "reassigning" ) {
             menu_mode = "activating";
             const auto mut_id = trait_by_invlet( ch );
@@ -236,8 +238,8 @@ void player::power_mutations()
                 continue;
             }
             redraw = true;
-            const long newch = popup_getkey( _( "%s; enter new letter." ),
-                                             mutation_branch::get_name( mut_id ) );
+            const int newch = popup_getkey( _( "%s; enter new letter." ),
+                                            mutation_branch::get_name( mut_id ) );
             wrefresh( wBio );
             if( newch == ch || newch == ' ' || newch == KEY_ESCAPE ) {
                 continue;

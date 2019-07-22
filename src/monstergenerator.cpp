@@ -25,6 +25,7 @@
 #include "game.h"
 #include "pathfinding.h"
 #include "units.h"
+#include "translations.h"
 
 namespace
 {
@@ -100,6 +101,7 @@ const std::map<std::string, m_flag> flag_map = {
     { "NO_BREATHE", MF_NO_BREATHE },
     { "REGENERATES_50", MF_REGENERATES_50 },
     { "REGENERATES_10", MF_REGENERATES_10 },
+    { "REGENERATES_1", MF_REGENERATES_1 },
     { "REGENERATES_IN_DARK", MF_REGENERATES_IN_DARK },
     { "FLAMMABLE", MF_FLAMMABLE },
     { "REVIVES", MF_REVIVES },
@@ -134,8 +136,10 @@ const std::map<std::string, m_flag> flag_map = {
     { "PRIORITIZE_TARGETS", MF_PRIORITIZE_TARGETS },
     { "NOT_HALLUCINATION", MF_NOT_HALLU },
     { "CATFOOD", MF_CATFOOD },
+    { "CANPLAY", MF_CANPLAY },
     { "CATTLEFODDER", MF_CATTLEFODDER },
     { "BIRDFOOD", MF_BIRDFOOD },
+    { "PET_MOUNTABLE", MF_PET_MOUNTABLE },
     { "DOGFOOD", MF_DOGFOOD },
     { "MILKABLE", MF_MILKABLE },
     { "NO_BREED", MF_NO_BREED },
@@ -143,10 +147,11 @@ const std::map<std::string, m_flag> flag_map = {
     { "DRIPS_NAPALM", MF_DRIPS_NAPALM },
     { "DRIPS_GASOLINE", MF_DRIPS_GASOLINE },
     { "ELECTRIC_FIELD", MF_ELECTRIC_FIELD },
+    { "STUN_IMMUNE", MF_STUN_IMMUNE },
     { "LOUDMOVES", MF_LOUDMOVES }
 };
 
-}
+} // namespace
 
 namespace io
 {
@@ -163,7 +168,7 @@ m_flag string_to_enum<m_flag>( const std::string &flag )
     return string_to_enum_look_up( flag_map, flag );
 }
 
-}
+} // namespace io
 
 /** @relates string_id */
 template<>
@@ -237,7 +242,7 @@ static int calc_bash_skill( const mtype &t )
     return ret;
 }
 
-m_size volume_to_size( const units::volume vol )
+static m_size volume_to_size( const units::volume vol )
 {
     if( vol <= 7500_ml ) {
         return MS_TINY;
@@ -788,6 +793,8 @@ void MonsterGenerator::load_species( JsonObject &jo, const std::string &src )
 
 void species_type::load( JsonObject &jo, const std::string & )
 {
+    optional( jo, was_loaded, "footsteps", footsteps, "footsteps." );
+    footsteps = _( footsteps );
     const auto flag_reader = enum_flags_reader<m_flag> { "monster flag" };
     optional( jo, was_loaded, "flags", flags, flag_reader );
 
@@ -881,6 +888,8 @@ mtype_special_attack MonsterGenerator::create_actor( JsonObject obj, const std::
         new_attack = new bite_actor();
     } else if( attack_type == "gun" ) {
         new_attack = new gun_actor();
+    } else if( attack_type == "spell" ) {
+        new_attack = new mon_spellcasting_actor();
     } else {
         obj.throw_error( "unknown monster attack", "attack_type" );
     }

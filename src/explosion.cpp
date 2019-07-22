@@ -14,10 +14,12 @@
 #include <utility>
 #include <vector>
 
+#include "avatar.h"
 #include "bodypart.h"
 #include "calendar.h"
 #include "cata_utility.h"
 #include "color.h"
+#include "coordinate_conversions.h"
 #include "creature.h"
 #include "damage.h"
 #include "debug.h"
@@ -49,6 +51,13 @@
 #include "units.h"
 #include "vehicle.h"
 #include "vpart_position.h"
+#include "flat_set.h"
+#include "int_id.h"
+#include "material.h"
+#include "monster.h"
+#include "mtype.h"
+#include "point.h"
+#include "type_id.h"
 
 static const itype_id null_itype( "null" );
 
@@ -250,18 +259,18 @@ static void do_blast( const tripoint &p, const float power,
         g->m.smash_items( pt, force );
 
         if( fire ) {
-            int density = ( force > 50.0f ) + ( force > 100.0f );
+            int intensity = ( force > 50.0f ) + ( force > 100.0f );
             if( force > 10.0f || x_in_y( force, 10.0f ) ) {
-                density++;
+                intensity++;
             }
 
-            if( !g->m.has_zlevels() && g->m.is_outside( pt ) && density == 2 ) {
+            if( !g->m.has_zlevels() && g->m.is_outside( pt ) && intensity == 2 ) {
                 // In 3D mode, it would have fire fields above, which would then fall
                 // and fuel the fire on this tile
-                density++;
+                intensity++;
             }
 
-            g->m.add_field( pt, fd_fire, density );
+            g->m.add_field( pt, fd_fire, intensity );
         }
 
         if( const optional_vpart_position vp = g->m.veh_at( pt ) ) {
@@ -719,7 +728,7 @@ void emp_blast( const tripoint &p )
     }
     // Drain any items of their battery charge
     for( auto &it : g->m.i_at( x, y ) ) {
-        if( it.is_tool() && it.ammo_type() == ammotype( "battery" ) ) {
+        if( it.is_tool() && it.ammo_current() == "battery" ) {
             it.charges = 0;
         }
     }
@@ -729,11 +738,11 @@ void emp_blast( const tripoint &p )
 void resonance_cascade( const tripoint &p )
 {
     const time_duration maxglow = time_duration::from_turns( 100 - 5 * trig_dist( p, g->u.pos() ) );
-    const time_duration minglow = std::max( 0_turns, time_duration::from_turns( 60 - 5 * trig_dist( p,
-                                            g->u.pos() ) ) );
     MonsterGroupResult spawn_details;
     monster invader;
     if( maxglow > 0_turns ) {
+        const time_duration minglow = std::max( 0_turns, time_duration::from_turns( 60 - 5 * trig_dist( p,
+                                                g->u.pos() ) ) );
         g->u.add_effect( efftype_id( "teleglow" ), rng( minglow, maxglow ) * 100 );
     }
     int startx = ( p.x < 8 ? 0 : p.x - 8 ), endx = ( p.x + 8 >= SEEX * 3 ? SEEX * 3 - 1 : p.x + 8 );
@@ -751,7 +760,7 @@ void resonance_cascade( const tripoint &p )
                 case 5:
                     for( int k = i - 1; k <= i + 1; k++ ) {
                         for( int l = j - 1; l <= j + 1; l++ ) {
-                            field_id type = fd_null;
+                            field_type_id type = fd_null;
                             switch( rng( 1, 7 ) ) {
                                 case 1:
                                     type = fd_blood;
@@ -814,10 +823,9 @@ void nuke( const tripoint &p )
 {
     // TODO: nukes hit above surface, not critter = 0
     // TODO: Z
-    int x = p.x;
-    int y = p.y;
+    tripoint p_surface( p.xy(), 0 );
     tinymap tmpmap;
-    tmpmap.load( x * 2, y * 2, 0, false );
+    tmpmap.load( omt_to_sm_copy( p_surface ), false );
     tripoint dest( 0, 0, p.z );
     int &i = dest.x;
     int &j = dest.y;
@@ -833,14 +841,14 @@ void nuke( const tripoint &p )
         }
     }
     tmpmap.save();
-    overmap_buffer.ter( x, y, 0 ) = oter_id( "crater" );
+    overmap_buffer.ter( p_surface ) = oter_id( "crater" );
     // Kill any npcs on that omap location.
-    for( const auto &npc : overmap_buffer.get_npcs_near_omt( x, y, 0, 0 ) ) {
+    for( const auto &npc : overmap_buffer.get_npcs_near_omt( p_surface, 0 ) ) {
         npc->marked_for_death = true;
     }
 }
 
-}
+} // namespace explosion_handler
 
 // This is only ever used to zero the cloud values, which is what makes it work.
 fragment_cloud &fragment_cloud::operator=( const float &value )

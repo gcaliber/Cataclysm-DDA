@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 #include <iterator>
+#include <cstddef>
 
+#include "avatar.h"
 #include "cata_utility.h"
 #include "catacharset.h" // used for utf8_width()
 #include "game.h"
@@ -16,6 +18,7 @@
 #include "string_formatter.h"
 #include "translations.h"
 #include "debug.h"
+#include "enums.h"
 
 namespace
 {
@@ -120,7 +123,7 @@ std::string body_part_names( const std::vector<body_part> &parts )
     names.reserve( parts.size() );
     for( size_t i = 0; i < parts.size(); ++i ) {
         const body_part part = parts[i];
-        if( i + 1 < parts.size() && parts[i + 1] == body_part( bp_aiOther[part] ) ) {
+        if( i + 1 < parts.size() && parts[i + 1] == static_cast<body_part>( bp_aiOther[part] ) ) {
             // Can combine two body parts (e.g. arms)
             names.push_back( body_part_name_accusative( part, 2 ) );
             ++i;
@@ -364,7 +367,7 @@ static std::vector<layering_item_info> items_cover_bp( const Character &c, int b
     return s;
 }
 
-void draw_grid( const catacurses::window &w, int left_pane_w, int mid_pane_w )
+static void draw_grid( const catacurses::window &w, int left_pane_w, int mid_pane_w )
 {
     const int win_w = getmaxx( w );
     const int win_h = getmaxy( w );
@@ -753,11 +756,11 @@ void player::sort_armor()
 
             // only equip if something valid selected!
             if( loc ) {
-                // save iterator to cursor's position
-                std::list<item>::iterator cursor_it = tmp_worn[leftListIndex];
                 // wear the item
                 if( cata::optional<std::list<item>::iterator> new_equip_it =
                         wear( this->i_at( loc.obtain( *this ) ) ) ) {
+                    // save iterator to cursor's position
+                    std::list<item>::iterator cursor_it = tmp_worn[leftListIndex];
                     // reorder `worn` vector to place new item at cursor
                     worn.splice( cursor_it, worn, *new_equip_it );
                 } else if( is_npc() ) {

@@ -8,22 +8,21 @@
 #include <string>
 
 #include "calendar.h"
-#include "enums.h"
 #include "io_tags.h"
 #include "monster.h"
 #include "string_id.h"
 #include "type_id.h"
+#include "point.h"
 
 // from overmap.h
 class overmap;
 class JsonObject;
 class JsonIn;
 class JsonOut;
-
 struct MonsterGroupEntry;
 
-typedef std::vector<MonsterGroupEntry> FreqDef;
-typedef FreqDef::iterator FreqDef_iter;
+using FreqDef = std::vector<MonsterGroupEntry>;
+using FreqDef_iter = FreqDef::iterator;
 
 struct MonsterGroupEntry {
     mtype_id name;
@@ -185,7 +184,7 @@ class MonsterGroupManager
 
     private:
         static std::map<mongroup_id, MonsterGroup> monsterGroupMap;
-        typedef std::set<std::string> t_string_set;
+        using t_string_set = std::set<std::string>;
         static t_string_set monster_blacklist;
         static t_string_set monster_whitelist;
         static t_string_set monster_categories_blacklist;

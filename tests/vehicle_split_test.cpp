@@ -2,13 +2,13 @@
 #include <set>
 #include <vector>
 
+#include "avatar.h"
 #include "catch/catch.hpp"
 #include "game.h"
 #include "map.h"
-#include "player.h"
 #include "vehicle.h"
-#include "enums.h"
 #include "type_id.h"
+#include "point.h"
 
 TEST_CASE( "vehicle_split_section" )
 {

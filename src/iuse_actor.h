@@ -11,6 +11,7 @@
 
 #include "calendar.h"
 #include "color.h"
+#include "enums.h"
 #include "explosion.h"
 #include "game_constants.h"
 #include "iuse.h"
@@ -25,7 +26,6 @@ class player;
 struct iteminfo;
 struct tripoint;
 
-enum field_id : int;
 enum hp_part : int;
 enum body_part : int;
 class JsonObject;
@@ -71,6 +71,9 @@ class iuse_transform : public iuse_actor
 
         /** used to set the active property of the transformed @ref target */
         bool active = false;
+
+        /**does the item requires to be worn to be activable*/
+        bool need_worn = false;
 
         /** subtracted from @ref Creature::moves when transformation is successful */
         int moves = 0;
@@ -148,9 +151,9 @@ class explosion_iuse : public iuse_actor
         bool flashbang_player_immune = false;
         /** Create fields of this type around the center of the explosion */
         int fields_radius = -1;
-        field_id fields_type;
-        int fields_min_density = 1;
-        int fields_max_density = MAX_FIELD_DENSITY;
+        field_type_id fields_type;
+        int fields_min_intensity = 1;
+        int fields_max_intensity = 0;
         /** Calls game::emp_blast if >= 0 */
         int emp_blast_radius = -1;
         /** Calls game::scrambler_blast if >= 0 */
@@ -380,13 +383,14 @@ class reveal_map_actor : public iuse_actor
         /**
          * Overmap terrain types that get revealed.
          */
-        std::vector<std::string> omt_types;
+        std::vector<std::pair<std::string, ot_match_type>> omt_types;
         /**
          * The message displayed after revealing.
          */
         std::string message;
 
-        void reveal_targets( const tripoint &center, const std::string &target, int reveal_distance ) const;
+        void reveal_targets( const tripoint &center, const std::pair<std::string, ot_match_type> &target,
+                             int reveal_distance ) const;
 
         reveal_map_actor( const std::string &type = "reveal_map" ) : iuse_actor( type ) {}
 
@@ -660,6 +664,45 @@ class musical_instrument_actor : public iuse_actor
 };
 
 /**
+ * Learn a spell
+ */
+class learn_spell_actor : public iuse_actor
+{
+    public:
+        // list of spell ids that can be learned from this item
+        std::vector<std::string> spells;
+
+        learn_spell_actor( const std::string &type = "learn_spell" ) : iuse_actor( type ) {}
+
+        ~learn_spell_actor() override = default;
+        void load( JsonObject &jo ) override;
+        int use( player &p, item &, bool, const tripoint & ) const override;
+        iuse_actor *clone() const override;
+        void info( const item &, std::vector<iteminfo> & ) const override;
+};
+
+/**
+ * Cast a spell. The item's spell level is fixed, and the casting action uses up a charge from the item.
+ */
+class cast_spell_actor : public iuse_actor
+{
+    public:
+        // this item's spell fail % is 0
+        bool no_fail;
+        // the spell this item casts when used.
+        spell_id item_spell;
+        int spell_level;
+
+        cast_spell_actor( const std::string &type = "cast_spell" ) : iuse_actor( type ) {}
+
+        ~cast_spell_actor() override = default;
+        void load( JsonObject &jo ) override;
+        int use( player &p, item &itm, bool, const tripoint & ) const override;
+        iuse_actor *clone() const override;
+        void info( const item &, std::vector<iteminfo> & ) const override;
+};
+
+/**
  * Holster a weapon
  */
 class holster_actor : public iuse_actor
@@ -926,7 +969,7 @@ class place_trap_actor : public iuse_actor
         /** Data that applies to buried traps. */
         data buried_data;
         /**
-         * The trap that makes up the outer layer of a 3x3 trap. This is not supported for buried traps!
+         * The trap that makes up the outer layer of a multi-tile trap. This is not supported for buried traps!
          */
         trap_str_id outer_layer_trap;
         bool is_allowed( player &p, const tripoint &pos, const std::string &name ) const;
@@ -1038,4 +1081,21 @@ class deploy_tent_actor : public iuse_actor
         bool check_intact( const tripoint &pos ) const;
 };
 
+/**
+* Weigh yourself on a bathroom scale. or something.
+*/
+class weigh_self_actor : public iuse_actor
+{
+    public:
+        // max weight this device can handle before showing "error"
+        units::mass max_weight;
+
+        weigh_self_actor( const std::string &type = "weigh_self" ) : iuse_actor( type ) {}
+
+        ~weigh_self_actor() override = default;
+        void load( JsonObject &jo ) override;
+        int use( player &p, item &itm, bool, const tripoint & ) const override;
+        iuse_actor *clone() const override;
+        void info( const item &, std::vector<iteminfo> & ) const override;
+};
 #endif

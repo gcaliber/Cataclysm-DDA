@@ -11,6 +11,7 @@
 #include <set>
 #include <utility>
 
+#include "avatar.h"
 #include "cata_utility.h"
 #include "catacharset.h"
 #include "crafting.h"
@@ -19,7 +20,6 @@
 #include "itype.h"
 #include "json.h"
 #include "output.h"
-#include "player.h"
 #include "recipe_dictionary.h"
 #include "requirements.h"
 #include "skill.h"
@@ -63,7 +63,7 @@ int related_menu_fill( uilist &rmenu,
                        const std::vector<std::pair<itype_id, std::string>> &related_recipes,
                        const recipe_subset &available );
 
-std::string get_cat_name( const std::string &prefixed_name )
+static std::string get_cat_name( const std::string &prefixed_name )
 {
     return prefixed_name.substr( 3, prefixed_name.size() - 3 );
 }
@@ -94,7 +94,7 @@ void load_recipe_category( JsonObject &jsobj )
     }
 }
 
-std::string get_subcat_name( const std::string &cat, const std::string &prefixed_name )
+static std::string get_subcat_name( const std::string &cat, const std::string &prefixed_name )
 {
     std::string prefix = "CSC_" + get_cat_name( cat ) + "_";
 
@@ -105,13 +105,13 @@ std::string get_subcat_name( const std::string &cat, const std::string &prefixed
     return ( prefixed_name == "CSC_ALL" ? _( "ALL" ) : _( "NONCRAFT" ) );
 }
 
-void translate_all()
+static void translate_all()
 {
     for( const auto &cat : craft_cat_list ) {
         normalized_names[cat] = _( get_cat_name( cat ) );
 
         for( const auto &subcat : craft_subcat_list[cat] ) {
-            normalized_names[subcat] =  _( get_subcat_name( cat, subcat ) ) ;
+            normalized_names[subcat] = _( get_subcat_name( cat, subcat ) ) ;
         }
     }
 }
@@ -122,8 +122,8 @@ void reset_recipe_categories()
     craft_subcat_list.clear();
 }
 
-int print_items( const recipe &r, const catacurses::window &w, int ypos, int xpos, nc_color col,
-                 int batch )
+static int print_items( const recipe &r, const catacurses::window &w, int ypos, int xpos,
+                        nc_color col, int batch )
 {
     if( !r.has_byproducts() ) {
         return 0;
@@ -266,8 +266,7 @@ const recipe *select_crafting_recipe( int &batch_size )
                 current.clear();
                 for( int i = 1; i <= 20; i++ ) {
                     current.push_back( chosen );
-                    available.push_back( chosen->requirements().can_make_with_inventory( crafting_inv,
-                                         chosen->get_component_filter(), i ) );
+                    available.push_back( g->u.can_start_craft( chosen, i ) );
                 }
             } else {
                 std::vector<const recipe *> picking;
@@ -354,19 +353,19 @@ const recipe *select_crafting_recipe( int &batch_size )
                 } else if( subtab.cur() == "CSC_*_RECENT" ) {
                     picking = available_recipes.recent();
                 } else if( subtab.cur() == "CSC_*_HIDDEN" ) {
-                    picking.insert( picking.end(), available_recipes.begin(), available_recipes.end() );
+                    current = available_recipes.hidden();
                     show_hidden = true;
                 } else {
                     picking = available_recipes.in_category( tab.cur(), subtab.cur() != "CSC_ALL" ? subtab.cur() : "" );
                 }
 
-                current.clear();
-                for( auto i : picking ) {
-                    if( ( uistate.hidden_recipes.find( i->ident() ) != uistate.hidden_recipes.end() ) == show_hidden ) {
-                        current.push_back( i );
-                    }
-                }
                 if( !show_hidden ) {
+                    current.clear();
+                    for( auto i : picking ) {
+                        if( uistate.hidden_recipes.find( i->ident() ) == uistate.hidden_recipes.end() ) {
+                            current.push_back( i );
+                        }
+                    }
                     draw_hidden_amount( w_head, 0, picking.size() - current.size() );
                 }
 
@@ -374,8 +373,7 @@ const recipe *select_crafting_recipe( int &batch_size )
                 // cache recipe availability on first display
                 for( const auto e : current ) {
                     if( !availability_cache.count( e ) ) {
-                        availability_cache.emplace( e, e->requirements().can_make_with_inventory( crafting_inv,
-                                                    e->get_component_filter() ) );
+                        availability_cache.emplace( e, g->u.can_start_craft( e ) );
                     }
                 }
 

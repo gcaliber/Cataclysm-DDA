@@ -8,10 +8,9 @@
 #include "item.h"
 #include "itype.h"
 #include "mondeath.h"
+#include "monstergenerator.h"
 #include "translations.h"
 #include "mapdata.h"
-
-struct species_type;
 
 const species_id MOLLUSK( "MOLLUSK" );
 
@@ -133,7 +132,7 @@ bool mtype::same_species( const mtype &other ) const
     return false;
 }
 
-field_id mtype::bloodType() const
+field_type_id mtype::bloodType() const
 {
     if( has_flag( MF_ACID_BLOOD ) )
         //A monster that has the death effect "ACID" does not need to have acid blood.
@@ -158,7 +157,7 @@ field_id mtype::bloodType() const
     return fd_null;
 }
 
-field_id mtype::gibType() const
+field_type_id mtype::gibType() const
 {
     if( has_flag( MF_LARVA ) || in_species( MOLLUSK ) ) {
         return fd_gibs_invertebrate;
@@ -220,4 +219,12 @@ int mtype::get_meat_chunks_count() const
 std::string mtype::get_description() const
 {
     return _( description );
+}
+
+std::string mtype::get_footsteps() const
+{
+    for( const species_id &s : species ) {
+        return s.obj().get_footsteps();
+    }
+    return "footsteps.";
 }

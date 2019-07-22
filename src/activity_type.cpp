@@ -13,6 +13,7 @@
 #include "translations.h"
 #include "player.h"
 #include "player_activity.h"
+#include "string_formatter.h"
 
 // activity_type functions
 static std::map< activity_id, activity_type > activity_type_all;
@@ -50,7 +51,8 @@ void activity_type::load( JsonObject &jo )
 
     result.id_ = activity_id( jo.get_string( "id" ) );
     assign( jo, "rooted", result.rooted_, true );
-    result.stop_phrase_ = _( jo.get_string( "stop_phrase" ) );
+    result.stop_phrase_ = string_format( _( "Stop %s?" ), jo.get_string( "verb" ) );
+    result.verb_ = _( jo.get_string( "verb" ) );
     assign( jo, "suspendable", result.suspendable_, true );
     assign( jo, "no_resume", result.no_resume_, true );
     assign( jo, "refuel_fires", result.refuel_fires, false );

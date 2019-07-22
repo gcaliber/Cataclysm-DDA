@@ -1,13 +1,14 @@
 #include <memory>
 
+#include "avatar.h"
 #include "catch/catch.hpp"
 #include "game.h"
 #include "map.h"
 #include "map_helpers.h"
-#include "player.h"
 #include "enums.h"
 #include "game_constants.h"
 #include "type_id.h"
+#include "point.h"
 
 TEST_CASE( "destroy_grabbed_furniture" )
 {

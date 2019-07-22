@@ -25,6 +25,7 @@
 #include "pldata.h"
 #include "type_id.h"
 #include "units.h"
+#include "point.h"
 
 class JsonObject;
 class JsonIn;
@@ -37,11 +38,10 @@ struct pathfinding_settings;
 struct trap;
 
 enum class mon_trigger;
-enum field_id : int;
 
 class monster;
 
-typedef std::map< mfaction_id, std::set< monster * > > mfactions;
+using mfactions = std::map< mfaction_id, std::set< monster * > >;
 
 class mon_special_attack
 {
@@ -204,7 +204,7 @@ class monster : public Creature
         int calc_movecost( const tripoint &f, const tripoint &t ) const;
         int calc_climb_cost( const tripoint &f, const tripoint &t ) const;
 
-        bool is_immune_field( const field_id fid ) const override;
+        bool is_immune_field( const field_type_id fid ) const override;
 
         /**
          * Attempt to move to p.
@@ -396,8 +396,8 @@ class monster : public Creature
 
         bool is_hallucination() const override;    // true if the monster isn't actually real
 
-        field_id bloodType() const override;
-        field_id gibType() const override;
+        field_type_id bloodType() const override;
+        field_type_id gibType() const override;
 
         using Creature::add_msg_if_npc;
         void add_msg_if_npc( const std::string &msg ) const override;
@@ -413,22 +413,29 @@ class monster : public Creature
         int wandf;           // Urge to wander - Increased by sound, decrements each move
         std::vector<item> inv; // Inventory
         player *dragged_foe; // player being dragged by the monster
-
+        cata::optional<item> tied_item; // item used to tie the monster
         // DEFINING VALUES
         int friendly;
         int anger = 0;
         int morale = 0;
-        mfaction_id faction; // Our faction (species, for most monsters)
-        int mission_id; // If we're related to a mission
+        // Our faction (species, for most monsters)
+        mfaction_id faction;
+        // If we're related to a mission
+        int mission_id;
         const mtype *type;
-        bool no_extra_death_drops;    // if true, don't spawn loot items as part of death
-        bool no_corpse_quiet = false; //if true, monster dies quietly and leaves no corpse
-        bool death_drops =
-            true; // Turned to false for simulating monsters during distant missions so they don't drop in sight
+        // If true, don't spawn loot items as part of death.
+        bool no_extra_death_drops;
+        // If true, monster dies quietly and leaves no corpse.
+        bool no_corpse_quiet = false;
+        // Turned to false for simulating monsters during distant missions so they don't drop in sight.
+        bool death_drops = true;
         bool is_dead() const;
         bool made_footstep;
-        std::string unique_name; // If we're unique
+        // If we're unique
+        std::string unique_name;
         bool hallucination;
+        // abstract for a fish monster representing a hidden stock of population in that area.
+        int fish_population = 1;
 
         void setpos( const tripoint &p ) override;
         const tripoint &pos() const override;
@@ -479,7 +486,10 @@ class monster : public Creature
 
         const pathfinding_settings &get_pathfinding_settings() const override;
         std::set<tripoint> get_path_avoid() const override;
-
+        // summoned monsters via spells
+        void set_summon_time( const time_duration &length );
+        // handles removing the monster if the timer runs out
+        void decrement_summon_timer();
     private:
         void process_trigger( mon_trigger trig, int amount );
         void process_trigger( mon_trigger trig, const std::function<int()> &amount_func );
@@ -504,6 +514,7 @@ class monster : public Creature
         /** Found path. Note: Not used by monsters that don't pathfind! **/
         std::vector<tripoint> path;
         std::bitset<NUM_MEFF> effect_cache;
+        cata::optional<time_duration> summon_time_limit = cata::nullopt;
 
     protected:
         void store( JsonOut &jsout ) const;

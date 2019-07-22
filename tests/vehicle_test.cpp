@@ -1,14 +1,15 @@
 #include <memory>
 #include <vector>
 
+#include "avatar.h"
 #include "catch/catch.hpp"
 #include "game.h"
 #include "map.h"
 #include "map_helpers.h"
-#include "player.h"
 #include "vehicle.h"
 #include "enums.h"
 #include "type_id.h"
+#include "point.h"
 
 TEST_CASE( "detaching_vehicle_unboards_passengers" )
 {

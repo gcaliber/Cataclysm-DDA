@@ -7,9 +7,11 @@
 #include <sstream>
 #include <memory>
 #include <tuple>
-#include <type_traits>
+#include <list>
 
+#include "action.h"
 #include "activity_handlers.h"
+#include "avatar.h"
 #include "debug.h"
 #include "game.h"
 #include "iexamine.h"
@@ -31,7 +33,6 @@
 #include "veh_type.h"
 #include "vpart_position.h"
 #include "vpart_range.h"
-#include "vpart_reference.h"
 #include "string_input_popup.h"
 #include "color.h"
 #include "input.h"
@@ -44,6 +45,12 @@
 #include "requirements.h"
 #include "rng.h"
 #include "string_id.h"
+#include "field.h"
+#include "bodypart.h"
+#include "enums.h"
+#include "monster.h"
+#include "mtype.h"
+#include "weather.h"
 
 static const itype_id fuel_type_none( "null" );
 static const itype_id fuel_type_battery( "battery" );
@@ -55,7 +62,8 @@ static const fault_id fault_glowplug( "fault_engine_glow_plug" );
 static const fault_id fault_immobiliser( "fault_engine_immobiliser" );
 static const fault_id fault_pump( "fault_engine_pump_fuel" );
 static const fault_id fault_starter( "fault_engine_starter" );
-
+const efftype_id effect_harnessed( "harnessed" );
+const efftype_id effect_tied( "tied" );
 const skill_id skill_mechanics( "mechanics" );
 
 enum change_types : int {
@@ -226,6 +234,7 @@ void vehicle::set_electronics_menu_options( std::vector<uilist_entry> &options,
     add_toggle( _( "fridge" ), keybind( "TOGGLE_FRIDGE" ), "FRIDGE" );
     add_toggle( _( "freezer" ), keybind( "TOGGLE_FREEZER" ), "FREEZER" );
     add_toggle( _( "space heater" ), keybind( "TOGGLE_SPACE_HEATER" ), "SPACE_HEATER" );
+    add_toggle( _( "cooler" ), keybind( "TOGGLE_COOLER" ), "COOLER" );
     add_toggle( _( "recharger" ), keybind( "TOGGLE_RECHARGER" ), "RECHARGE" );
     add_toggle( _( "plow" ), keybind( "TOGGLE_PLOW" ), "PLOW" );
     add_toggle( _( "reaper" ), keybind( "TOGGLE_REAPER" ), "REAPER" );
@@ -669,6 +678,12 @@ void vehicle::use_controls( const tripoint &pos )
     menu.entries = options;
     menu.query();
     if( menu.ret >= 0 ) {
+        // allow player to turn off engine without triggering another warning
+        if( menu.ret != 0 && menu.ret != 1 && menu.ret != 2 && menu.ret != 3 ) {
+            if( !handle_potential_theft( dynamic_cast<player &>( g->u ) ) ) {
+                return;
+            }
+        }
         actions[menu.ret]();
         // Don't access `this` from here on, one of the actions above is to call
         // fold_up(), which may have deleted `this` object.
@@ -818,17 +833,17 @@ bool vehicle::start_engine( const int e )
             if( einfo.has_flag( "MUSCLE_ARMS" ) && ( g->u.hp_cur[hp_arm_l] == 0 ||
                     g->u.hp_cur[hp_arm_r] == 0 ) ) {
                 add_msg( _( "You cannot use %s with a broken arm." ), eng.name() );
+                return false;
             } else if( einfo.has_flag( "MUSCLE_LEGS" ) && ( g->u.hp_cur[hp_leg_l] == 0 ||
                        g->u.hp_cur[hp_leg_r] == 0 ) ) {
                 add_msg( _( "You cannot use %s with a broken leg." ), eng.name() );
-            } else {
-                add_msg( _( "The %s's mechanism is out of reach!" ), name );
+                return false;
             }
         } else {
             add_msg( _( "Looks like the %1$s is out of %2$s." ), eng.name(),
                      item::nname( einfo.fuel_type ) );
+            return false;
         }
-        return false;
     }
 
     const double dmg = parts[engines[e]].damage_percent();
@@ -883,8 +898,8 @@ bool vehicle::start_engine( const int e )
         return false;
     }
 
-    // Damaged engines have a chance of failing to start
-    if( x_in_y( dmg * 100, 120 ) ) {
+    // Damaged non-electric engines have a chance of failing to start
+    if( !is_engine_type( e, fuel_type_battery ) && x_in_y( dmg * 100, 120 ) ) {
         sounds::sound( pos, eng.info().engine_noise_factor(), sounds::sound_t::movement,
                        string_format( _( "the %s clanking and grinding" ), eng.name() ), true, "vehicle",
                        "engine_clanking_fail" );
@@ -1003,7 +1018,7 @@ void vehicle::reload_seeds( const tripoint &pos )
     } );
 
     auto seed_entries = iexamine::get_seed_entries( seed_inv );
-    seed_entries.emplace( seed_entries.begin(), seed_tuple( itype_id( "null" ), "No seed", 0 ) );
+    seed_entries.emplace( seed_entries.begin(), seed_tuple( itype_id( "null" ), _( "No seed" ), 0 ) );
 
     int seed_index = iexamine::query_seed( seed_entries );
 
@@ -1073,33 +1088,36 @@ void vehicle::play_chimes()
     }
 }
 
-void vehicle::operate_plow()
+void vehicle::transform_terrain()
 {
-    for( const vpart_reference &vp : get_enabled_parts( "PLOW" ) ) {
-        const tripoint start_plow = vp.pos();
-        if( g->m.has_flag( "PLOWABLE", start_plow ) ) {
-            g->m.ter_set( start_plow, t_dirtmound );
-        } else {
-            const int speed = abs( velocity );
-            int v_damage = rng( 3, speed );
-            damage( vp.part_index(), v_damage, DT_BASH, false );
-            sounds::sound( start_plow, v_damage, sounds::sound_t::combat, _( "Clanggggg!" ), false,
-                           "smash_success", "hit_vehicle" );
+    for( const vpart_reference &vp : get_enabled_parts( "TRANSFORM_TERRAIN" ) ) {
+        const tripoint start_pos = vp.pos();
+        const transform_terrain_data &ttd = vp.info().transform_terrain;
+        bool prereq_fulfilled = false;
+        for( const std::string &flag : ttd.pre_flags ) {
+            if( g->m.has_flag( flag, start_pos ) ) {
+                prereq_fulfilled = true;
+                break;
+            }
         }
-    }
-}
-
-void vehicle::operate_rockwheel()
-{
-    for( const vpart_reference &vp : get_enabled_parts( "ROCKWHEEL" ) ) {
-        const tripoint start_dig = vp.pos();
-        if( g->m.has_flag( "DIGGABLE", start_dig ) ) {
-            g->m.ter_set( start_dig, t_pit_shallow );
+        if( prereq_fulfilled ) {
+            const ter_id new_ter = ter_id( ttd.post_terrain );
+            if( new_ter != t_null ) {
+                g->m.ter_set( start_pos, new_ter );
+            }
+            const furn_id new_furn = furn_id( ttd.post_furniture );
+            if( new_furn != f_null ) {
+                g->m.furn_set( start_pos, new_furn );
+            }
+            const field_type_id new_field = field_type_id( ttd.post_field );
+            if( new_field != fd_null ) {
+                g->m.add_field( start_pos, new_field, ttd.post_field_intensity, ttd.post_field_age );
+            }
         } else {
             const int speed = abs( velocity );
             int v_damage = rng( 3, speed );
             damage( vp.part_index(), v_damage, DT_BASH, false );
-            sounds::sound( start_dig, v_damage, sounds::sound_t::combat, _( "Clanggggg!" ), false,
+            sounds::sound( start_pos, v_damage, sounds::sound_t::combat, _( "Clanggggg!" ), false,
                            "smash_success", "hit_vehicle" );
         }
     }
@@ -1110,33 +1128,35 @@ void vehicle::operate_reaper()
     for( const vpart_reference &vp : get_enabled_parts( "REAPER" ) ) {
         const size_t reaper_id = vp.part_index();
         const tripoint reaper_pos = vp.pos();
-        const int plant_produced =  rng( 1, vp.info().bonus );
+        const int plant_produced = rng( 1, vp.info().bonus );
         const int seed_produced = rng( 1, 3 );
         const units::volume max_pickup_volume = vp.info().size / 20;
-        if( g->m.furn( reaper_pos ) != f_plant_harvest ||
-            !g->m.has_items( reaper_pos ) ) {
+        if( g->m.furn( reaper_pos ) != f_plant_harvest ) {
             continue;
         }
-        const item &seed = g->m.i_at( reaper_pos ).front();
-        if( seed.typeId() == "fungal_seeds" ||
-            seed.typeId() == "marloss_seed" ) {
+        // Can't use item_stack::only_item() since there might be fertilizer
+        map_stack items = g->m.i_at( reaper_pos );
+        map_stack::iterator seed = std::find_if( items.begin(), items.end(), []( const item & it ) {
+            return it.is_seed();
+        } );
+        if( seed == items.end() || seed->typeId() == "fungal_seeds" ||
+            seed->typeId() == "marloss_seed" ) {
             // Otherworldly plants, the earth-made reaper can not handle those.
             continue;
         }
         g->m.furn_set( reaper_pos, f_null );
         g->m.i_clear( reaper_pos );
         for( auto &i : iexamine::get_harvest_items(
-                 *seed.type, plant_produced, seed_produced, false ) ) {
+                 *seed->type, plant_produced, seed_produced, false ) ) {
             g->m.add_item_or_charges( reaper_pos, i );
         }
         sounds::sound( reaper_pos, rng( 10, 25 ), sounds::sound_t::combat, _( "Swish" ), false, "vehicle",
                        "reaper" );
         if( vp.has_feature( "CARGO" ) ) {
-            map_stack stack( g->m.i_at( reaper_pos ) );
-            for( auto iter = stack.begin(); iter != stack.end(); ) {
+            for( map_stack::iterator iter = items.begin(); iter != items.end(); ) {
                 if( ( iter->volume() <= max_pickup_volume ) &&
                     add_item( reaper_id, *iter ) ) {
-                    iter = stack.erase( iter );
+                    iter = items.erase( iter );
                 } else {
                     ++iter;
                 }
@@ -1205,18 +1225,16 @@ void vehicle::operate_scoop()
                 continue;
             }
             item *that_item_there = nullptr;
-            const map_stack q = g->m.i_at( position );
+            map_stack items = g->m.i_at( position );
             if( g->m.has_flag( "SEALED", position ) ) {
                 // Ignore it. Street sweepers are not known for their ability to harvest crops.
                 continue;
             }
-            size_t itemdex = 0;
-            for( const item &it : q ) {
+            for( item &it : items ) {
                 if( it.volume() < max_pickup_volume ) {
-                    that_item_there = g->m.item_from( position, itemdex );
+                    that_item_there = &it;
                     break;
                 }
-                itemdex++;
             }
             if( !that_item_there ) {
                 continue;
@@ -1231,7 +1249,7 @@ void vehicle::operate_scoop()
             }
             //This attempts to add the item to the scoop inventory and if successful, removes it from the map.
             if( add_item( scoop, *that_item_there ) ) {
-                g->m.i_rem( position, itemdex );
+                g->m.i_rem( position, that_item_there );
             } else {
                 break;
             }
@@ -1321,8 +1339,11 @@ void vehicle::open_or_close( const int part_index, const bool opening )
     parts[part_index].open = opening;
     insides_dirty = true;
     g->m.set_transparency_cache_dirty( smz );
-    sfx::play_variant_sound( opening ? "vehicle_open" : "vehicle_close",
-                             parts[ part_index ].info().get_id().str(), 100 );
+    const int dist = rl_dist( g->u.pos(), mount_to_tripoint( parts[part_index].mount ) );
+    if( dist < 20 ) {
+        sfx::play_variant_sound( opening ? "vehicle_open" : "vehicle_close",
+                                 parts[ part_index ].info().get_id().str(), 100 - dist * 3 );
+    }
     for( auto const &vec : find_lines_of_parts( part_index, "OPENABLE" ) ) {
         for( auto const &partID : vec ) {
             parts[partID].open = opening;
@@ -1388,6 +1409,42 @@ void vehicle::use_monster_capture( int part, const tripoint &pos )
         parts[part].remove_flag( vehicle_part::animal_flag );
     }
     invalidate_mass();
+}
+
+void vehicle::use_harness( int part, const tripoint &pos )
+{
+    if( parts[part].is_unavailable() || parts[part].removed ) {
+        add_msg( "is unavailable" );
+        return;
+    }
+    const cata::optional<tripoint> target_ = choose_adjacent(
+                _( "Where is the creature to harness?" ) );
+    const tripoint target = *target_;
+    monster *mon_ptr = g->critter_at<monster>( target );
+    if( mon_ptr != nullptr ) {
+        monster &f = *mon_ptr;
+        if( f.friendly != 0 && f.has_flag( MF_PET_MOUNTABLE ) && g->is_empty( pos ) ) {
+            f.add_effect( effect_harnessed, 1_turns, num_bp, true );
+            f.setpos( pos );
+            add_msg( m_info, _( "You harness your %s to the %s." ), f.get_name(), name );
+            if( f.has_effect( effect_tied ) ) {
+                add_msg( m_info, _( "You untie your %s." ), f.get_name() );
+                f.remove_effect( effect_tied );
+                if( f.tied_item ) {
+                    g->u.i_add( *f.tied_item );
+                    f.tied_item = cata::nullopt;
+                }
+            }
+        } else if( f.friendly == 0 ) {
+            add_msg( m_info, _( "This creature is not friendly!" ) );
+        } else if( !f.has_flag( MF_PET_MOUNTABLE ) ) {
+            add_msg( m_info, _( "This creature cannot be harnessed." ) );
+        } else if( !g->is_empty( pos ) ) {
+            add_msg( m_info, _( "The harness is blocked." ) );
+        }
+    } else {
+        add_msg( m_info, _( "No creature there." ) );
+    }
 }
 
 void vehicle::use_bike_rack( int part )
@@ -1479,6 +1536,8 @@ void vehicle::interact_with( const tripoint &pos, int interact_part )
                                      true );
     const bool has_monster_capture = monster_capture_part >= 0;
     const int bike_rack_part = avail_part_with_feature( interact_part, "BIKE_RACK_VEH", true );
+    const int harness_part = avail_part_with_feature( interact_part, "ANIMAL_CTRL", true );
+    const bool has_harness = harness_part >= 0;
     const bool has_bike_rack = bike_rack_part >= 0;
     const bool has_planter = avail_part_with_feature( interact_part, "PLANTER", true ) >= 0 ||
                              avail_part_with_feature( interact_part, "ADVANCED_PLANTER", true ) >= 0;
@@ -1488,7 +1547,7 @@ void vehicle::interact_with( const tripoint &pos, int interact_part )
     enum {
         EXAMINE, TRACK, CONTROL, CONTROL_ELECTRONICS, GET_ITEMS, GET_ITEMS_ON_GROUND, FOLD_VEHICLE, UNLOAD_TURRET, RELOAD_TURRET,
         USE_HOTPLATE, FILL_CONTAINER, DRINK, USE_WELDER, USE_PURIFIER, PURIFY_TANK, USE_WASHMACHINE, USE_MONSTER_CAPTURE,
-        USE_BIKE_RACK, RELOAD_PLANTER, WORKBENCH
+        USE_BIKE_RACK, USE_HARNESS, RELOAD_PLANTER, WORKBENCH
     };
     uilist selectmenu;
 
@@ -1544,6 +1603,9 @@ void vehicle::interact_with( const tripoint &pos, int interact_part )
     if( has_bike_rack ) {
         selectmenu.addentry( USE_BIKE_RACK, true, 'R', _( "Load or unload a vehicle" ) );
     }
+    if( has_harness ) {
+        selectmenu.addentry( USE_HARNESS, true, 'H', _( "Harness an animal" ) );
+    }
     if( has_planter ) {
         selectmenu.addentry( RELOAD_PLANTER, true, 's', _( "Reload seed drill with seeds" ) );
     }
@@ -1560,7 +1622,11 @@ void vehicle::interact_with( const tripoint &pos, int interact_part )
         selectmenu.query();
         choice = selectmenu.ret;
     }
-
+    if( choice != EXAMINE && choice != TRACK && choice != GET_ITEMS_ON_GROUND ) {
+        if( !handle_potential_theft( dynamic_cast<player &>( g->u ) ) ) {
+            return;
+        }
+    }
     auto veh_tool = [&]( const itype_id & obj ) {
         item pseudo( obj );
         if( fuel_left( "battery" ) < pseudo.ammo_required() ) {
@@ -1577,6 +1643,10 @@ void vehicle::interact_with( const tripoint &pos, int interact_part )
     switch( choice ) {
         case USE_BIKE_RACK: {
             use_bike_rack( bike_rack_part );
+            return;
+        }
+        case USE_HARNESS: {
+            use_harness( harness_part, pos );
             return;
         }
         case USE_MONSTER_CAPTURE: {

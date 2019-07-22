@@ -4,12 +4,14 @@
 
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 namespace behavior
 {
 
 class node_t;
 class oracle_t;
+
 enum status_t : char;
 struct behavior_return;
 
@@ -40,6 +42,6 @@ class sequential_until_done_t : public strategy_t
 
 extern std::unordered_map<std::string, const strategy_t *> strategy_map;
 
-}
+} // namespace behavior
 
 #endif

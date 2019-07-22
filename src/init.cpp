@@ -33,6 +33,7 @@
 #include "json.h"
 #include "loading_ui.h"
 #include "mapdata.h"
+#include "map_extras.h"
 #include "mapgen.h"
 #include "martialarts.h"
 #include "material.h"
@@ -57,6 +58,7 @@
 #include "requirements.h"
 #include "rotatable_symbols.h"
 #include "scenario.h"
+#include "sdltiles.h"
 #include "skill.h"
 #include "skill_boost.h"
 #include "sounds.h"
@@ -73,10 +75,8 @@
 #include "bodypart.h"
 #include "translations.h"
 #include "type_id.h"
-
-#if defined(TILES)
-void load_tileset();
-#endif
+#include "construction_category.h"
+#include "overmap.h"
 
 DynamicDataLoader::DynamicDataLoader()
 {
@@ -133,7 +133,7 @@ void DynamicDataLoader::load_deferred( deferred_json &data )
     }
 }
 
-void load_ignored_type( JsonObject &jo )
+static void load_ignored_type( JsonObject &jo )
 {
     // This does nothing!
     // This function is used for types that are to be ignored
@@ -183,6 +183,7 @@ void DynamicDataLoader::initialize()
     add( "EXTERNAL_OPTION", &load_external_option );
     add( "json_flag", &json_flag::load );
     add( "fault", &fault::load_fault );
+    add( "field_type", &field_types::load );
     add( "emit", &emit::load_emit );
     add( "activity_type", &activity_type::load );
     add( "vitamin", &vitamin::load_vitamin );
@@ -277,6 +278,9 @@ void DynamicDataLoader::initialize()
     add( "MAGAZINE", []( JsonObject & jo, const std::string & src ) {
         item_controller->load_magazine( jo, src );
     } );
+    add( "BATTERY", []( JsonObject & jo, const std::string & src ) {
+        item_controller->load_battery( jo, src );
+    } );
     add( "GENERIC", []( JsonObject & jo, const std::string & src ) {
         item_controller->load_generic( jo, src );
     } );
@@ -308,7 +312,9 @@ void DynamicDataLoader::initialize()
     add( "martial_art", &load_martial_art );
     add( "effect_type", &load_effect_type );
     add( "tutorial_messages", &load_tutorial_messages );
+    add( "obsolete_terrain", &overmap::load_obsolete_terrains );
     add( "overmap_terrain", &overmap_terrains::load );
+    add( "construction_category", &construction_categories::load );
     add( "construction", &load_construction );
     add( "mapgen", &load_mapgen );
     add( "overmap_land_use_code", &overmap_land_use_codes::load );
@@ -316,6 +322,7 @@ void DynamicDataLoader::initialize()
     add( "overmap_location", &overmap_locations::load );
     add( "overmap_special", &overmap_specials::load );
     add( "city_building", &city_buildings::load );
+    add( "map_extra", &MapExtras::load );
 
     add( "region_settings", &load_region_settings );
     add( "region_overlay", &load_region_overlay );
@@ -447,6 +454,7 @@ void DynamicDataLoader::unload_data()
     json_flag::reset();
     requirement_data::reset();
     vitamin::reset();
+    field_types::reset();
     emit::reset();
     activity_type::reset();
     fault::reset();
@@ -463,6 +471,7 @@ void DynamicDataLoader::unload_data()
     mutations_category.clear();
     mutation_category_trait::reset();
     mutation_branch::reset_all();
+    spell_type::reset_all();
     reset_bionics();
     clear_tutorial_messages();
     reset_furn_ter();
@@ -477,6 +486,7 @@ void DynamicDataLoader::unload_data()
     faction_template::reset();
     quality::reset();
     trap::reset();
+    construction_categories::reset();
     reset_constructions();
     overmap_terrains::reset();
     reset_region_settings();
@@ -521,6 +531,8 @@ void DynamicDataLoader::finalize_loaded_data( loading_ui &ui )
     using named_entry = std::pair<std::string, std::function<void()>>;
     const std::vector<named_entry> entries = {{
             { _( "Body parts" ), &body_part_struct::finalize_all },
+            { _( "Field types" ), &field_types::finalize_all },
+            { _( "Emissions" ), &emit::finalize },
             {
                 _( "Items" ), []()
                 {
@@ -596,6 +608,7 @@ void DynamicDataLoader::check_consistency( loading_ui &ui )
                 }
             },
             { _( "Vitamins" ), &vitamin::check_consistency },
+            { _( "Field types" ), &field_types::check_consistency },
             { _( "Emissions" ), &emit::check_consistency },
             { _( "Activities" ), &activity_type::check_consistency },
             {

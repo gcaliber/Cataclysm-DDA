@@ -1,16 +1,18 @@
 #include "faction.h"
 
+#include <assert.h>
 #include <cstdlib>
+#include <bitset>
 #include <map>
 #include <string>
 #include <memory>
 #include <set>
 #include <utility>
 
+#include "avatar.h"
 #include "basecamp.h"
 #include "cursesdef.h"
 #include "debug.h"
-#include "enums.h"
 #include "faction_camp.h"
 #include "game.h"
 #include "game_constants.h"
@@ -20,7 +22,6 @@
 #include "npc.h"
 #include "output.h"
 #include "overmapbuffer.h"
-#include "player.h"
 #include "skill.h"
 #include "string_formatter.h"
 #include "translations.h"
@@ -28,18 +29,14 @@
 #include "optional.h"
 #include "pimpl.h"
 #include "type_id.h"
+#include "point.h"
 
-static std::map<faction_id, faction_template> _all_faction_templates;
-
-std::string invent_name();
-std::string invent_adj();
+namespace npc_factions
+{
+std::vector<faction_template> all_templates;
+} // namespace npc_factions
 
 const faction_id your_faction = faction_id( "your_followers" );
-
-constexpr inline unsigned long mfb( const int v )
-{
-    return 1ul << v;
-}
 
 faction_template::faction_template()
 {
@@ -50,6 +47,7 @@ faction_template::faction_template()
     wealth = 0;
     size = 0;
     power = 0;
+    currency = "null";
 }
 
 faction::faction( const faction_template &templ )
@@ -62,12 +60,25 @@ faction::faction( const faction_template &templ )
 void faction_template::load( JsonObject &jsobj )
 {
     faction_template fac( jsobj );
-    _all_faction_templates.emplace( fac.id, fac );
+    npc_factions::all_templates.emplace_back( fac );
 }
 
 void faction_template::reset()
 {
-    _all_faction_templates.clear();
+    npc_factions::all_templates.clear();
+}
+
+void faction_template::load_relations( JsonObject &jsobj )
+{
+    JsonObject jo = jsobj.get_object( "relations" );
+    for( const std::string &fac_id : jo.get_member_names() ) {
+        JsonObject rel_jo = jo.get_object( fac_id );
+        std::bitset<npc_factions::rel_types> fac_relation( 0 );
+        for( const auto &rel_flag : npc_factions::relation_strs ) {
+            fac_relation.set( rel_flag.second, rel_jo.get_bool( rel_flag.first, false ) );
+        }
+        relations[fac_id] = fac_relation;
+    }
 }
 
 faction_template::faction_template( JsonObject &jsobj )
@@ -82,6 +93,13 @@ faction_template::faction_template( JsonObject &jsobj )
     , food_supply( jsobj.get_int( "food_supply" ) )
     , wealth( jsobj.get_int( "wealth" ) )
 {
+    if( jsobj.has_string( "currency" ) ) {
+        currency = jsobj.get_string( "currency" );
+    } else {
+        currency = "null";
+    }
+    load_relations( jsobj );
+    mon_faction = jsobj.get_string( "mon_faction", "human" );
 }
 
 std::string faction::describe() const
@@ -111,7 +129,7 @@ std::string fac_ranking_text( int val )
     if( val <= -10 ) {
         return _( "Pariah" );
     }
-    if( val <=  -5 ) {
+    if( val <= -5 ) {
         return _( "Disliked" );
     }
     if( val >= 100 ) {
@@ -251,6 +269,16 @@ nc_color faction::food_supply_color()
     }
 }
 
+bool faction::has_relationship( const faction_id &guy_id, npc_factions::relationship flag ) const
+{
+    for( const auto rel_data : relations ) {
+        if( rel_data.first == guy_id.c_str() ) {
+            return rel_data.second.test( flag );
+        }
+    }
+    return false;
+}
+
 std::string fac_combat_ability_text( int val )
 {
     if( val >= 150 ) {
@@ -295,8 +323,8 @@ void faction_manager::create_if_needed()
     if( !factions.empty() ) {
         return;
     }
-    for( const auto &elem : _all_faction_templates ) {
-        factions.emplace_back( elem.second );
+    for( const auto &fac_temp : npc_factions::all_templates ) {
+        factions.emplace_back( fac_temp );
     }
 }
 
@@ -304,9 +332,34 @@ faction *faction_manager::get( const faction_id &id )
 {
     for( faction &elem : factions ) {
         if( elem.id == id ) {
+            if( !elem.validated ) {
+                for( const faction_template &fac_temp : npc_factions::all_templates ) {
+                    if( fac_temp.id == id ) {
+                        elem.currency = fac_temp.currency;
+                        elem.name = fac_temp.name;
+                        elem.desc = fac_temp.desc;
+                        elem.mon_faction = fac_temp.mon_faction;
+                        for( const auto &rel_data : fac_temp.relations ) {
+                            if( elem.relations.find( rel_data.first ) == elem.relations.end() ) {
+                                elem.relations[rel_data.first] = rel_data.second;
+                            }
+                        }
+                        break;
+                    }
+                }
+                elem.validated = true;
+            }
             return &elem;
         }
     }
+    for( const faction_template &elem : npc_factions::all_templates ) {
+        if( elem.id == id ) {
+            factions.emplace_back( elem );
+            factions.back().validated = true;
+            return &factions.back();
+        }
+    }
+
     debugmsg( "Requested non-existing faction '%s'", id.str() );
     return nullptr;
 }
@@ -315,12 +368,11 @@ void basecamp::faction_display( const catacurses::window &fac_w, const int width
 {
     int y = 2;
     const nc_color col = c_white;
-    const tripoint player_abspos =  g->u.global_omt_location();
+    const tripoint player_abspos = g->u.global_omt_location();
     tripoint camp_pos = camp_omt_pos();
     std::string direction = direction_name( direction_from( player_abspos, camp_pos ) );
     mvwprintz( fac_w, ++y, width, c_light_gray, _( "Press enter to rename this camp" ) );
-    const std::string centerstring = "center";
-    if( ( !direction.compare( centerstring ) ) == 0 ) {
+    if( direction != "center" ) {
         mvwprintz( fac_w, ++y, width, c_light_gray, _( "Direction : to the " ) + direction );
     }
     mvwprintz( fac_w, ++y, width, col, _( "Location : (%d, %d)" ), camp_pos.x, camp_pos.y );
@@ -342,7 +394,7 @@ int npc::faction_display( const catacurses::window &fac_w, const int width ) con
     int retval = 0;
     int y = 2;
     const nc_color col = c_white;
-    const tripoint player_abspos =  g->u.global_omt_location();
+    const tripoint player_abspos = g->u.global_omt_location();
 
     //get NPC followers, status, direction, location, needs, weapon, etc.
     mvwprintz( fac_w, ++y, width, c_light_gray, _( "Press enter to talk to this follower " ) );
@@ -352,7 +404,7 @@ int npc::faction_display( const catacurses::window &fac_w, const int width ) con
         cata::optional<tripoint> dest = get_mission_destination();
         if( dest ) {
             basecamp *dest_camp;
-            cata::optional<basecamp *> temp_camp = overmap_buffer.find_camp( dest->x, dest->y );
+            cata::optional<basecamp *> temp_camp = overmap_buffer.find_camp( dest->xy() );
             if( temp_camp ) {
                 dest_camp = *temp_camp;
                 dest_string = _( "travelling to : " ) + dest_camp->camp_name();
@@ -370,7 +422,7 @@ int npc::faction_display( const catacurses::window &fac_w, const int width ) con
     tripoint guy_abspos = global_omt_location();
     basecamp *stationed_at;
     bool is_stationed = false;
-    cata::optional<basecamp *> p = overmap_buffer.find_camp( guy_abspos.x, guy_abspos.y );
+    cata::optional<basecamp *> p = overmap_buffer.find_camp( guy_abspos.xy() );
     if( p ) {
         is_stationed = true;
         stationed_at = *p;
@@ -378,8 +430,7 @@ int npc::faction_display( const catacurses::window &fac_w, const int width ) con
         stationed_at = nullptr;
     }
     std::string direction = direction_name( direction_from( player_abspos, guy_abspos ) );
-    std::string centerstring = "center";
-    if( ( !direction.compare( centerstring ) ) == 0 ) {
+    if( direction != "center" ) {
         mvwprintz( fac_w, ++y, width, col, _( "Direction : to the " ) + direction );
     } else {
         mvwprintz( fac_w, ++y, width, col, _( "Direction : Nearby" ) );
@@ -409,16 +460,16 @@ int npc::faction_display( const catacurses::window &fac_w, const int width ) con
             max_range *= ( 1 + ( pos().z * 0.1 ) );
             if( is_stationed ) {
                 // if camp that NPC is at, has a radio tower
-                if( stationed_at->has_level( "camp", 20, "[B]" ) ) {
+                if( stationed_at->has_provides( "radio_tower" ) ) {
                     max_range *= 5;
                 }
             }
             // if camp that player is at, has a radio tower
-            cata::optional<basecamp *> player_camp = overmap_buffer.find_camp( g->u.global_omt_location().x,
-                    g->u.global_omt_location().y );
+            cata::optional<basecamp *> player_camp =
+                overmap_buffer.find_camp( g->u.global_omt_location().xy() );
             if( const cata::optional<basecamp *> player_camp = overmap_buffer.find_camp(
-                        g->u.global_omt_location().x, g->u.global_omt_location().y ) ) {
-                if( ( *player_camp )->has_level( "camp", 20, "[B]" ) ) {
+                        g->u.global_omt_location().xy() ) ) {
+                if( ( *player_camp )->has_provides( "radio_tower" ) ) {
                     max_range *= 5;
                 }
             }
@@ -554,7 +605,7 @@ void new_faction_manager::display() const
         // create a list of faction camps
         std::vector<basecamp *> camps;
         for( auto elem : g->u.camps ) {
-            cata::optional<basecamp *> p = overmap_buffer.find_camp( elem.x, elem.y );
+            cata::optional<basecamp *> p = overmap_buffer.find_camp( elem.xy() );
             if( !p ) {
                 continue;
             }

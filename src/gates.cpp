@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-#include <list>
 #include <memory>
 #include <set>
 
+#include "avatar.h"
 #include "game.h" // TODO: This is a circular dependency
 #include "generic_factory.h"
 #include "iexamine.h"
@@ -23,13 +23,14 @@
 #include "enums.h"
 #include "int_id.h"
 #include "item.h"
-#include "item_stack.h"
 #include "optional.h"
 #include "player_activity.h"
 #include "string_id.h"
 #include "translations.h"
 #include "units.h"
 #include "type_id.h"
+#include "colony.h"
+#include "point.h"
 
 // Gates namespace
 
@@ -275,6 +276,9 @@ void doors::close_door( map &m, Character &who, const tripoint &closep )
         const int inside_closable = veh->next_part_to_close( vpart );
         const int openable = veh->next_part_to_open( vpart );
         if( closable >= 0 ) {
+            if( !veh->handle_potential_theft( dynamic_cast<player &>( g->u ) ) ) {
+                return;
+            }
             veh->close( closable );
             didit = true;
         } else if( inside_closable >= 0 ) {
@@ -315,7 +319,7 @@ void doors::close_door( map &m, Character &who, const tripoint &closep )
                 m.close_door( closep, inside, false );
                 didit = true;
                 who.add_msg_if_player( m_info, _( "You push the %s out of the way." ),
-                                       items_in_way.size() == 1 ?  items_in_way[0].tname() : _( "stuff" ) );
+                                       items_in_way.size() == 1 ? items_in_way.only_item().tname() : _( "stuff" ) );
                 who.mod_moves( -std::min( items_in_way.stored_volume() / ( max_nudge / 50 ), 100 ) );
 
                 if( m.has_flag( "NOITEM", closep ) ) {
@@ -337,4 +341,3 @@ void doors::close_door( map &m, Character &who, const tripoint &closep )
         who.mod_moves( -90 ); // TODO: Vary this? Based on strength, broken legs, and so on.
     }
 }
-

@@ -5,13 +5,13 @@
 #include <vector>
 #include <algorithm>
 
+#include "avatar.h"
 #include "mission.h"
 #include "calendar.h"
 // needed for the workaround for the std::to_string bug in some compilers
 #include "compatibility.h" // IWYU pragma: keep
 #include "input.h"
 #include "output.h"
-#include "player.h"
 #include "npc.h"
 #include "color.h"
 #include "debug.h"

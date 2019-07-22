@@ -8,10 +8,12 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 #include "enums.h"
 #include "item_location.h"
 #include "string_id.h"
+#include "point.h"
 
 class player;
 class Character;
@@ -42,6 +44,7 @@ class player_activity
         std::vector<int> values;
         std::vector<std::string> str_values;
         std::vector<tripoint> coords;
+        std::unordered_set<tripoint> coord_set;
         std::vector<std::weak_ptr<monster>> monsters;
         tripoint placement;
         /** If true, the activity will be auto-resumed next time the player attempts
@@ -53,9 +56,9 @@ class player_activity
         player_activity( activity_id, int turns = 0, int Index = -1, int pos = INT_MIN,
                          const std::string &name_in = "" );
         player_activity( player_activity && ) = default;
-        player_activity( const player_activity & );
+        player_activity( const player_activity & ) = default;
         player_activity &operator=( player_activity && ) = default;
-        player_activity &operator=( const player_activity & );
+        player_activity &operator=( const player_activity & ) = default;
 
         explicit operator bool() const {
             return !type.is_null();
@@ -74,6 +77,8 @@ class player_activity
         // Question to ask when the activity is to be stopped,
         // e.g. "Stop doing something?", already translated.
         std::string get_stop_phrase() const;
+
+        std::string get_verb() const;
 
         int get_value( size_t index, int def = 0 ) const;
         std::string get_str_value( size_t index, const std::string &def = "" ) const;

@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "avatar.h"
 #include "explosion.h"
 #include "event.h"
 #include "field.h"
@@ -42,6 +43,8 @@
 #include "units.h"
 #include "weighted_list.h"
 #include "type_id.h"
+#include "colony.h"
+#include "point.h"
 
 const mtype_id mon_blob( "mon_blob" );
 const mtype_id mon_blob_brain( "mon_blob_brain" );
@@ -115,8 +118,8 @@ void mdeath::normal( monster &z )
     }
 }
 
-void scatter_chunks( const std::string &chunk_name, int chunk_amt, monster &z, int distance,
-                     int pile_size = 1 )
+static void scatter_chunks( const std::string &chunk_name, int chunk_amt, monster &z, int distance,
+                            int pile_size = 1 )
 {
     // can't have less than one item in a pile or it would cause an infinite loop
     pile_size = std::max( pile_size, 1 );
@@ -172,8 +175,8 @@ void mdeath::splatter( monster &z )
         }
     }
 
-    const field_id type_blood = z.bloodType();
-    const field_id type_gib = z.gibType();
+    const field_type_id type_blood = z.bloodType();
+    const field_type_id type_gib = z.gibType();
 
     if( gibbable ) {
         const auto area = g->m.points_in_radius( z.pos(), 1 );
@@ -356,7 +359,7 @@ void mdeath::triffid_heart( monster &z )
 void mdeath::fungus( monster &z )
 {
     // If the fungus died from anti-fungal poison, don't pouf
-    if( g->m.get_field_strength( z.pos(), fd_fungicidal_gas ) ) {
+    if( g->m.get_field_intensity( z.pos(), fd_fungicidal_gas ) ) {
         return;
     }
 
@@ -598,10 +601,12 @@ void mdeath::explode( monster &z )
 
 void mdeath::focused_beam( monster &z )
 {
-
-    for( int k = g->m.i_at( z.pos() ).size() - 1; k >= 0; k-- ) {
-        if( g->m.i_at( z.pos() )[k].typeId() == "processor" ) {
-            g->m.i_rem( z.pos(), k );
+    map_stack items = g->m.i_at( z.pos() );
+    for( map_stack::iterator it = items.begin(); it != items.end(); ) {
+        if( it->typeId() == "processor" ) {
+            it = items.erase( it );
+        } else {
+            ++it;
         }
     }
 
@@ -643,8 +648,19 @@ void mdeath::broken( monster &z )
     }
     // make "broken_manhack", or "broken_eyebot", ...
     item_id.insert( 0, "broken_" );
-    g->m.spawn_item( z.pos(), item_id, 1, 0, calendar::turn );
-    if( g->u.sees( z.pos() ) ) {
+
+    item broken_mon( item_id, calendar::turn );
+    const int max_hp = std::max( z.get_hp_max(), 1 );
+    const float overflow_damage = std::max( -z.get_hp(), 0 );
+    const float corpse_damage = 2.5 * overflow_damage / max_hp;
+    broken_mon.set_damage( static_cast<int>( std::floor( corpse_damage * itype::damage_scale ) ) );
+
+    g->m.add_item_or_charges( z.pos(), broken_mon );
+
+    //TODO: make mdeath::splatter work for robots
+    if( ( broken_mon.damage() >= broken_mon.max_damage() ) && g->u.sees( z.pos() ) ) {
+        add_msg( m_good, _( "The %s is destroyed!" ), z.name() );
+    } else if( g->u.sees( z.pos() ) ) {
         add_msg( m_good, _( "The %s collapses!" ), z.name() );
     }
 }
@@ -696,7 +712,7 @@ void mdeath::jabberwock( monster &z )
     bool vorpal = ch && ch->is_player() &&
                   rl_dist( z.pos(), ch->pos() ) <= 1 &&
                   ch->weapon.has_flag( "DIAMOND" ) &&
-                  ch->weapon.volume() > units::from_milliliter( 750 );
+                  ch->weapon.volume() > 750_ml;
 
     if( vorpal && !ch->weapon.has_technique( matec_id( "VORPAL" ) ) ) {
         if( ch->sees( z ) ) {

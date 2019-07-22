@@ -1,12 +1,12 @@
 #include "tutorial.h"
 
-#include <cstddef>
 #include <array>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "action.h"
+#include "avatar.h"
 #include "coordinate_conversions.h"
 #include "game.h"
 #include "gamemode.h"
@@ -23,15 +23,15 @@
 #include "translations.h"
 #include "trap.h"
 #include "calendar.h"
-#include "enums.h"
 #include "game_constants.h"
 #include "int_id.h"
 #include "inventory.h"
 #include "item.h"
-#include "item_stack.h"
 #include "pldata.h"
 #include "units.h"
 #include "type_id.h"
+#include "point.h"
+#include "weather.h"
 
 const mtype_id mon_zombie( "mon_zombie" );
 
@@ -66,7 +66,7 @@ bool tutorial_game::init()
     // overmap terrain coordinates
     const int lx = 50;
     const int ly = 50;
-    auto &starting_om = overmap_buffer.get( 0, 0 );
+    auto &starting_om = overmap_buffer.get( point_zero );
     for( int i = 0; i < OMAPX; i++ ) {
         for( int j = 0; j < OMAPY; j++ ) {
             starting_om.ter( i, j, -1 ) = rock;
@@ -117,10 +117,10 @@ void tutorial_game::per_turn()
     }
 
     if( !tutorials_seen[LESSON_BUTCHER] ) {
-        for( size_t i = 0; i < g->m.i_at( g->u.posx(), g->u.posy() ).size(); i++ ) {
-            if( g->m.i_at( g->u.posx(), g->u.posy() )[i].is_corpse() ) {
+        for( const item &it : g->m.i_at( g->u.posx(), g->u.posy() ) ) {
+            if( it.is_corpse() ) {
                 add_message( LESSON_BUTCHER );
-                i = g->m.i_at( g->u.posx(), g->u.posy() ).size();
+                break;
             }
         }
     }

@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "avatar.h"
 #include "debug.h"
 #include "game.h"
 #include "messages.h"
@@ -9,7 +10,6 @@
 #include "rng.h"
 #include "translations.h"
 #include "item.h"
-#include "player.h"
 
 void mission_end::deposit_box( mission *miss )
 {

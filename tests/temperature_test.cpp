@@ -1,17 +1,20 @@
-#include <set>
+#include <stdlib.h>
+#include <memory>
+#include <string>
 
 #include "catch/catch.hpp"
 #include "calendar.h"
-#include "itype.h"
 #include "item.h"
-#include "map.h"
-#include "optional.h"
 #include "enums.h"
 #include "cata_utility.h"
 #include "game.h"
+#include "flat_set.h"
+#include "game_constants.h"
+#include "point.h"
+#include "weather.h"
 
 
-bool is_nearly( float value, float expected )
+static bool is_nearly( float value, float expected )
 {
     // Rounding errors make the values change around a bit
     // Inside reality bubble and outside reality bubble also get slightly different results
@@ -21,7 +24,7 @@ bool is_nearly( float value, float expected )
     return ret_val;
 }
 
-void set_map_temperature( int new_temperature )
+static void set_map_temperature( int new_temperature )
 {
     g->weather.temperature = new_temperature;
     g->weather.clear_temp_cache();

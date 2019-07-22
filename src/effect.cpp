@@ -15,11 +15,12 @@
 #include "string_formatter.h"
 #include "color.h"
 #include "enums.h"
+#include "units.h"
 
 namespace
 {
 std::map<efftype_id, effect_type> effect_types;
-}
+} // namespace
 
 /** @relates string_id */
 template<>
@@ -48,7 +49,7 @@ void weed_msg( player &p )
     const time_duration howhigh = p.get_effect_dur( effect_weed_high );
     ///\EFFECT_INT changes messages when smoking weed
     int smarts = p.get_int();
-    if( howhigh > 125_turns && one_in( 7 ) ) {
+    if( howhigh > 12_minutes && one_in( 7 ) ) {
         int msg = rng( 0, 5 );
         switch( msg ) {
             case 0: // Freakazoid
@@ -101,7 +102,7 @@ void weed_msg( player &p )
             default:
                 return;
         }
-    } else if( howhigh > 100_turns && one_in( 5 ) ) {
+    } else if( howhigh > 10_minutes && one_in( 5 ) ) {
         int msg = rng( 0, 5 );
         switch( msg ) {
             case 0: // Bob Marley
@@ -145,7 +146,7 @@ void weed_msg( player &p )
             default:
                 return;
         }
-    } else if( howhigh > 50_turns && one_in( 3 ) ) {
+    } else if( howhigh > 5_minutes && one_in( 3 ) ) {
         int msg = rng( 0, 5 );
         switch( msg ) {
             case 0: // Cheech and Chong
@@ -687,22 +688,21 @@ std::string effect::disp_short_desc( bool reduced ) const
 void effect::decay( std::vector<efftype_id> &rem_ids, std::vector<body_part> &rem_bps,
                     const time_point &time, const bool player )
 {
-    // Decay duration if not permanent
-    if( !is_permanent() ) {
-        mod_duration( -1_turns, player );
-    }
-
     // Decay intensity if supposed to do so
     // TODO: Remove effects that would decay to 0 intensity?
     if( intensity > 1 && eff_type->int_decay_tick != 0 &&
-        to_turn<int>( time ) % eff_type->int_decay_tick == 0 ) {
+        to_turn<int>( time ) % eff_type->int_decay_tick == 0 &&
+        get_max_duration() > get_duration() ) {
         set_intensity( intensity + eff_type->int_decay_step, player );
     }
 
     // Add to removal list if duration is <= 0
+    // Decay duration if not permanent
     if( duration <= 0_turns ) {
         rem_ids.push_back( get_id() );
         rem_bps.push_back( bp );
+    } else if( !is_permanent() ) {
+        mod_duration( -1_turns, player );
     }
 }
 
@@ -1254,13 +1254,25 @@ void load_effect_type( JsonObject &jo )
         new_etype.blocks_effects.push_back( efftype_id( f ) );
     }
 
+    if( jo.has_string( "max_duration" ) ) {
+        new_etype.max_duration = read_from_json_string<time_duration>( *jo.get_raw( "max_duration" ),
+                                 time_duration::units );
+    } else {
+        new_etype.max_duration = time_duration::from_turns( jo.get_int( "max_duration", 0 ) );
+    }
+
+    if( jo.has_string( "int_dur_factor" ) ) {
+        new_etype.int_dur_factor = read_from_json_string<time_duration>( *jo.get_raw( "int_dur_factor" ),
+                                   time_duration::units );
+    } else {
+        new_etype.int_dur_factor = time_duration::from_turns( jo.get_int( "int_dur_factor", 0 ) );
+    }
+
     new_etype.max_intensity = jo.get_int( "max_intensity", 1 );
-    new_etype.max_duration = time_duration::from_turns( jo.get_int( "max_duration", 0 ) );
     new_etype.dur_add_perc = jo.get_int( "dur_add_perc", 100 );
     new_etype.int_add_val = jo.get_int( "int_add_val", 0 );
     new_etype.int_decay_step = jo.get_int( "int_decay_step", -1 );
     new_etype.int_decay_tick = jo.get_int( "int_decay_tick", 0 );
-    new_etype.int_dur_factor = time_duration::from_turns( jo.get_int( "int_dur_factor", 0 ) );
 
     new_etype.load_miss_msgs( jo, "miss_messages" );
     new_etype.load_decay_msgs( jo, "decay_messages" );

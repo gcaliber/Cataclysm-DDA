@@ -1,6 +1,7 @@
 #include "translations.h"
 
 #include <clocale>
+#include <array>
 
 #if defined(LOCALIZE) && defined(__STRICT_ANSI__)
 #undef __STRICT_ANSI__ // _putenv in minGW need that
@@ -23,6 +24,7 @@
 #include "output.h"
 #include "path_info.h"
 #include "cursesdef.h"
+#include "cata_utility.h"
 
 // Names depend on the language settings. They are loaded from different files
 // based on the currently used language. If that changes, we have to reload the
@@ -76,7 +78,7 @@ const char *pgettext( const char *context, const char *msgid )
 }
 
 const char *npgettext( const char *const context, const char *const msgid,
-                       const char *const msgid_plural, const unsigned long int n )
+                       const char *const msgid_plural, const unsigned long long n )
 {
     const std::string context_id = std::string( context ) + '\004' + msgid;
     const char *const msg_ctxt_id = context_id.c_str();
@@ -235,7 +237,7 @@ std::string getOSXSystemLang()
     }
 
     const char *lang_code_raw = CFStringGetCStringPtr(
-                                    ( CFStringRef )CFArrayGetValueAtIndex( langs, 0 ),
+                                    reinterpret_cast<CFStringRef>( CFArrayGetValueAtIndex( langs, 0 ) ),
                                     kCFStringEncodingUTF8 );
     if( !lang_code_raw ) {
         return "en_US";

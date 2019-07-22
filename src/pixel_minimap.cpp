@@ -2,22 +2,37 @@
 
 #include "pixel_minimap.h"
 
+#include <assert.h>
+#include <stdlib.h>
+#include <set>
+#include <vector>
+#include <algorithm>
+#include <array>
+#include <bitset>
+#include <cmath>
+#include <iterator>
+#include <utility>
+
+#include "avatar.h"
 #include "coordinate_conversions.h"
 #include "game.h"
 #include "map.h"
 #include "mapdata.h"
 #include "monster.h"
 #include "sdl_utils.h"
-#include "player.h"
 #include "vehicle.h"
 #include "vpart_position.h"
-
-#include <set>
-#include <vector>
-
+#include "cata_utility.h"
+#include "character.h"
+#include "color.h"
+#include "creature.h"
+#include "game_constants.h"
+#include "int_id.h"
+#include "lightmap.h"
+#include "math_defines.h"
+#include "optional.h"
 
 extern void set_displaybuffer_rendertarget();
-
 
 namespace
 {
@@ -80,7 +95,7 @@ SDL_Color get_critter_color( Creature *critter, int flicker, int mixture )
     return result;
 }
 
-}
+} // namespace
 
 // a texture pool to avoid recreating textures every time player changes their view
 // at most 142 out of 144 textures can be in use due to regular player movement
@@ -147,7 +162,6 @@ struct pixel_minimap::submap_cache {
     //handle the release of the borrowed texture
     ~submap_cache();
 };
-
 
 pixel_minimap::pixel_minimap( const SDL_Renderer_Ptr &renderer ) :
     renderer( renderer ),

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "avatar.h"
 #include "ballistics.h"
 #include "bodypart.h"
 #include "creature.h"
@@ -20,6 +21,7 @@
 #include "translations.h"
 #include "enums.h"
 #include "item.h"
+#include "point.h"
 
 std::vector<tripoint> closest_tripoints_first( int radius, const tripoint &p );
 

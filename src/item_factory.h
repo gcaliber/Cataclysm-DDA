@@ -16,9 +16,11 @@
 #include "itype.h"
 #include "item.h"
 #include "item_category.h"
-#include "item_group.h"
 #include "iuse.h"
 #include "type_id.h"
+
+class Item_group;
+class Item_spawn_data;
 
 namespace cata
 {
@@ -27,9 +29,9 @@ template <typename T> class optional;
 
 bool item_is_blacklisted( const std::string &id );
 
-typedef std::string Item_tag;
-typedef std::string Group_tag;
-typedef std::vector<item> Item_list;
+using Item_tag = std::string;
+using Group_tag = std::string;
+using Item_list = std::vector<item>;
 
 class Item_factory;
 class JsonObject;
@@ -162,6 +164,7 @@ class Item_factory
         void load_fuel( JsonObject &jo, const std::string &src );
         void load_gunmod( JsonObject &jo, const std::string &src );
         void load_magazine( JsonObject &jo, const std::string &src );
+        void load_battery( JsonObject &jo, const std::string &src );
         void load_generic( JsonObject &jo, const std::string &src );
         void load_bionic( JsonObject &jo, const std::string &src );
         /*@}*/
@@ -247,7 +250,7 @@ class Item_factory
 
         mutable std::map<itype_id, std::unique_ptr<itype>> m_runtimes;
 
-        typedef std::map<Group_tag, std::unique_ptr<Item_spawn_data>> GroupMap;
+        using GroupMap = std::map<Group_tag, std::unique_ptr<Item_spawn_data>>;
         GroupMap m_template_groups;
 
         /** Checks that ammo is listed in ammunition_type::name().
@@ -300,6 +303,7 @@ class Item_factory
         void load( islot_gun &slot, JsonObject &jo, const std::string &src );
         void load( islot_gunmod &slot, JsonObject &jo, const std::string &src );
         void load( islot_magazine &slot, JsonObject &jo, const std::string &src );
+        void load( islot_battery &slot, JsonObject &jo, const std::string &src );
         void load( islot_bionic &slot, JsonObject &jo, const std::string &src );
         void load( islot_ammo &slot, JsonObject &jo, const std::string &src );
         void load( islot_seed &slot, JsonObject &jo, const std::string &src );

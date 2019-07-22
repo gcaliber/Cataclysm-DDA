@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "addiction.h"
+#include "avatar.h"
 #include "calendar.h" // ticks_between
 #include "cata_utility.h"
 #include "debug.h"
@@ -31,6 +32,8 @@
 #include "vpart_position.h"
 #include "rng.h"
 #include "string_id.h"
+#include "enums.h"
+#include "flat_set.h"
 
 namespace
 {
@@ -48,6 +51,7 @@ const efftype_id effect_hallu( "hallu" );
 const efftype_id effect_visuals( "visuals" );
 const efftype_id effect_common_cold( "common_cold" );
 const efftype_id effect_flu( "flu" );
+const efftype_id effect_fungus( "fungus" );
 
 const mtype_id mon_player_blob( "mon_player_blob" );
 
@@ -78,7 +82,7 @@ const std::map<itype_id, int> plut_charges = {
     { "plut_slurry",       PLUTONIUM_CHARGES / 2 }
 };
 
-}
+} // namespace
 
 int player::stomach_capacity() const
 {
@@ -251,7 +255,7 @@ std::map<vitamin_id, int> player::vitamins_from( const itype_id &id ) const
 }
 
 // list of traits the player has that modifies vitamin absorption
-std::list<trait_id> mut_vitamin_absorb_modify( const player &p )
+static std::list<trait_id> mut_vitamin_absorb_modify( const player &p )
 {
     std::list<trait_id> traits;
     for( auto &m : p.get_mutations() ) {
@@ -264,7 +268,7 @@ std::list<trait_id> mut_vitamin_absorb_modify( const player &p )
 }
 
 // is the material associated with this item?
-bool material_exists( const material_id &material, const item &item )
+static bool material_exists( const material_id &material, const item &item )
 {
     for( const material_id &mat : item.type->materials ) {
         if( mat == material ) {
@@ -389,7 +393,7 @@ bool player::vitamin_set( const vitamin_id &vit, int qty )
     return true;
 }
 
-float player::metabolic_rate_base() const
+float Character::metabolic_rate_base() const
 {
     float hunger_rate = get_option< float >( "PLAYER_HUNGER_RATE" );
     return hunger_rate * ( 1.0f + mutation_value( "metabolism_modifier" ) );
@@ -584,7 +588,7 @@ ret_val<edible_rating> player::will_eat( const item &food, bool interactive ) co
     }
 
     if( stomach.stomach_remaining() < food.volume() / food.charges && !food.has_infinite_charges() ) {
-        if( food.has_flag( "USE_EAT_VERB" ) ) {
+        if( edible ) {
             add_consequence( _( "You're full already and will be forcing yourself to eat." ), TOO_FULL );
         } else {
             add_consequence( _( "You're full already and will be forcing yourself to drink." ), TOO_FULL );
@@ -847,6 +851,10 @@ bool player::eat( item &food, bool force )
         }
     }
 
+    if( food.has_flag( "FUNGAL_VECTOR" ) && !has_trait( trait_id( "M_IMMUNE" ) ) ) {
+        add_effect( effect_fungus, 1_turns, num_bp, true );
+    }
+
     // The fun changes for these effects are applied in fun_for().
     if( food.has_flag( "MUSHY" ) ) {
         add_msg_if_player( m_bad,
@@ -1083,7 +1091,7 @@ bool player::consume_effects( item &food )
     // Moved here and changed a bit - it was too complex
     // Incredibly minor stuff like this shouldn't require complexity
     if( !is_npc() && has_trait( trait_id( "SLIMESPAWNER" ) ) &&
-        ( get_healthy_kcal() < get_stored_kcal() + 4000 ||
+        ( get_healthy_kcal() < get_stored_kcal() + 4000 &&
           get_thirst() - stomach.get_water() / 5_ml < 40 ) ) {
         add_msg_if_player( m_mixed,
                            _( "You feel as though you're going to split open!  In a good way?" ) );
@@ -1152,7 +1160,7 @@ bool player::can_feed_battery_with( const item &it ) const
         return false;
     }
 
-    return it.type->ammo->type.count( ammotype( "battery" ) );
+    return it.ammo_type() == ammotype( "battery" );
 }
 
 bool player::feed_battery_with( item &it )
@@ -1199,7 +1207,7 @@ bool player::can_feed_reactor_with( const item &it ) const
     }
 
     return std::any_of( acceptable.begin(), acceptable.end(), [ &it ]( const ammotype & elem ) {
-        return it.type->ammo->type.count( elem );
+        return it.ammo_type() == elem;
     } );
 }
 
@@ -1255,7 +1263,7 @@ bool player::feed_furnace_with( item &it )
         return false;
     }
 
-    const long consumed_charges = std::min( it.charges, it.charges_per_volume( furnace_max_volume ) );
+    const int consumed_charges = std::min( it.charges, it.charges_per_volume( furnace_max_volume ) );
     const int energy = get_acquirable_energy( it, rechargeable_cbm::furnace );
 
     if( energy == 0 ) {
@@ -1327,7 +1335,7 @@ int player::get_acquirable_energy( const item &it, rechargeable_cbm cbm ) const
             break;
 
         case rechargeable_cbm::battery:
-            return std::min<long>( it.charges, std::numeric_limits<int>::max() );
+            return std::min( it.charges, std::numeric_limits<int>::max() );
 
         case rechargeable_cbm::reactor:
             if( it.charges > 0 ) {

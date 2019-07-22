@@ -8,22 +8,21 @@
 #include <string>
 
 #include "string_id.h"
-#include "int_id.h"
 #include "type_id.h"
 
 class JsonObject;
 
-typedef std::string Group_tag;
-typedef std::string Mutation_category_tag;
+using Group_tag = std::string;
+using Mutation_category_tag = std::string;
 
 class Trait_group;
 
 namespace trait_group
 {
 
-typedef string_id<Trait_group> Trait_group_tag;
+using Trait_group_tag = string_id<Trait_group>;
 
-}
+} // namespace trait_group
 
 // TODO: Move to better suited file (rng.h/.cpp?)
 class distribution

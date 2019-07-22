@@ -3,6 +3,7 @@
 #include <string>
 #include <cmath>
 
+#include "avatar.h"
 #include "calendar.h"
 #include "cata_utility.h"
 #include "json.h"
@@ -15,6 +16,7 @@
 #include "itype.h"
 #include "optional.h"
 #include "rng.h"
+#include "character.h"
 
 stomach_contents::stomach_contents() = default;
 
@@ -24,7 +26,7 @@ stomach_contents::stomach_contents( units::volume max_vol )
     last_ate = calendar::before_time_starts;
 }
 
-std::string ml_to_string( units::volume vol )
+static std::string ml_to_string( units::volume vol )
 {
     return to_string( units::to_milliliter<int>( vol ) ) + "_ml";
 }
@@ -42,7 +44,7 @@ void stomach_contents::serialize( JsonOut &json ) const
     json.end_object();
 }
 
-units::volume string_to_ml( const std::string &str )
+static units::volume string_to_ml( const std::string &str )
 {
     return units::from_milliliter( std::stoi( str.substr( 0, str.size() - 3 ) ) );
 }
@@ -227,7 +229,7 @@ void stomach_contents::ingest( player &p, item &food, int charges = 1 )
 
     last_ate = calendar::turn;
 
-    mod_calories( comest_t->get_calories() );
+    mod_calories( p.kcal_for( comest ) );
 }
 
 void stomach_contents::absorb_water( player &p, units::volume amount )
@@ -259,7 +261,7 @@ void stomach_contents::absorb_kcal( int amount )
     }
 }
 
-bool stomach_contents::absorb_vitamin( vitamin_id vit, int amount )
+bool stomach_contents::absorb_vitamin( const vitamin_id &vit, int amount )
 {
     if( amount <= 0 ) {
         return false;
@@ -273,7 +275,7 @@ bool stomach_contents::absorb_vitamin( vitamin_id vit, int amount )
     return true;
 }
 
-bool stomach_contents::absorb_vitamin( std::pair<vitamin_id, int> vit )
+bool stomach_contents::absorb_vitamin( const std::pair<vitamin_id, int> &vit )
 {
     return absorb_vitamin( vit.first, vit.second );
 }
@@ -298,9 +300,9 @@ stomach_pass_rates stomach_contents::get_pass_rates( bool stomach )
     // 3 hours will be accounted here as stomach
     // the rest will be guts
     if( stomach ) {
-        rates.min_vol = std::max( capacity() / 50, 100_ml );
+        rates.min_vol = capacity() / 6;
         // 3 hours to empty in 30 minute increments
-        rates.percent_vol = 4.0f / 6.0f;
+        rates.percent_vol = 1.0f / 6.0f;
         rates.min_vit = 1;
         rates.percent_vit = 1.0f / 6.0f;
         rates.min_kcal = 5;
@@ -425,4 +427,14 @@ units::volume stomach_contents::get_water() const
 time_duration stomach_contents::time_since_ate() const
 {
     return calendar::turn - last_ate;
+}
+
+// sets default stomach contents when starting the game
+void Character::initialize_stomach_contents()
+{
+    stomach = stomach_contents( 2500_ml );
+    guts = stomach_contents( 24000_ml );
+    guts.set_calories( 300 );
+    stomach.set_calories( 800 );
+    stomach.mod_contents( 475_ml );
 }

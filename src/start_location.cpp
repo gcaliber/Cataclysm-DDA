@@ -2,12 +2,11 @@
 
 #include <climits>
 #include <algorithm>
-#include <random>
 #include <memory>
 
+#include "avatar.h"
 #include "coordinate_conversions.h"
 #include "debug.h"
-#include "enums.h"
 #include "field.h"
 #include "game.h"
 #include "generic_factory.h"
@@ -24,6 +23,7 @@
 #include "pldata.h"
 #include "rng.h"
 #include "translations.h"
+#include "point.h"
 
 class item;
 
@@ -32,7 +32,7 @@ const efftype_id effect_bleed( "bleed" );
 namespace
 {
 generic_factory<start_location> all_starting_locations( "starting location", "ident" );
-}
+} // namespace
 
 /** @relates string_id */
 template<>
@@ -96,7 +96,7 @@ void start_location::reset()
 }
 
 // check if tile at p should be boarded with some kind of furniture.
-void add_boardable( const map &m, const tripoint &p, std::vector<tripoint> &vec )
+static void add_boardable( const map &m, const tripoint &p, std::vector<tripoint> &vec )
 {
     if( m.has_furn( p ) ) {
         // Don't need to board this up, is already occupied
@@ -117,7 +117,7 @@ void add_boardable( const map &m, const tripoint &p, std::vector<tripoint> &vec 
     vec.push_back( p );
 }
 
-void board_up( map &m, const tripoint &start, const tripoint &end )
+static void board_up( map &m, const tripoint &start, const tripoint &end )
 {
     std::vector<tripoint> furnitures1;
     std::vector<tripoint> furnitures2;
@@ -190,7 +190,7 @@ void board_up( map &m, const tripoint &start, const tripoint &end )
         m.furn_set( fp, f_null );
         auto destination_items = m.i_at( bp );
         for( const item &moved_item : m.i_at( fp ) ) {
-            destination_items.push_back( moved_item );
+            destination_items.insert( moved_item );
         }
         m.i_clear( fp );
     }
@@ -214,7 +214,7 @@ tripoint start_location::find_player_initial_location() const
     // creating overmaps as necessary.
     const int radius = 3;
     for( const point &omp : closest_points_first( radius, point_zero ) ) {
-        overmap &omap = overmap_buffer.get( omp.x, omp.y );
+        overmap &omap = overmap_buffer.get( omp );
         const tripoint omtstart = omap.find_random_omt( target() );
         if( omtstart != overmap::invalid_tripoint ) {
             return omtstart + point( omp.x * OMAPX, omp.y * OMAPY );
@@ -243,9 +243,9 @@ void start_location::prepare_map( const tripoint &omtstart ) const
  * Maybe TODO: Allow "picking up" items or parts of bashable furniture
  *             and using them to help with bash attempts.
  */
-int rate_location( map &m, const tripoint &p, const bool must_be_inside,
-                   const int bash_str, const int attempt,
-                   int ( &checked )[MAPSIZE_X][MAPSIZE_Y] )
+static int rate_location( map &m, const tripoint &p, const bool must_be_inside,
+                          const int bash_str, const int attempt,
+                          int ( &checked )[MAPSIZE_X][MAPSIZE_Y] )
 {
     if( ( must_be_inside && m.is_outside( p ) ) ||
         m.impassable( p ) ||
@@ -394,15 +394,14 @@ void start_location::burn( const tripoint &omtstart,
     m.save();
 }
 
-void start_location::add_map_special( const tripoint &omtstart,
-                                      const std::string &map_special ) const
+void start_location::add_map_extra( const tripoint &omtstart,
+                                    const std::string &map_extra ) const
 {
     const tripoint player_location = omt_to_sm_copy( omtstart );
     tinymap m;
     m.load( player_location.x, player_location.y, player_location.z, false );
 
-    const auto ptr = MapExtras::get_function( map_special );
-    ptr( m, player_location );
+    MapExtras::apply_function( map_extra, m, player_location );
 
     m.save();
 }
@@ -410,7 +409,7 @@ void start_location::add_map_special( const tripoint &omtstart,
 void start_location::handle_heli_crash( player &u ) const
 {
     for( int i = 2; i < num_hp_parts; i++ ) { // Skip head + torso for balance reasons.
-        const auto part = hp_part( i );
+        const auto part = static_cast<hp_part>( i );
         const auto bp_part = u.hp_to_bp( part );
         const int roll = static_cast<int>( rng( 1, 8 ) );
         switch( roll ) {

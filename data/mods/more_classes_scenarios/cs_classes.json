@@ -133,27 +133,29 @@
       { "level": 1, "name": "firstaid" }
     ],
     "items": {
-      "both": [
-        "knit_scarf",
-        "undershirt",
-        "dress_shirt",
-        "jacket_light",
-        "gloves_light",
-        "pants",
-        "fanny",
-        "socks",
-        "sneakers",
-        "roadmap",
-        "restaurantmap",
-        "shavingkit",
-        "mess_kit",
-        "aluminum_foil",
-        "cell_phone",
-        "can_chowder",
-        "apple_cider",
-        "fruit_leather",
-        "suitcase_m"
-      ],
+      "both": {
+        "items": [
+          "knit_scarf",
+          "undershirt",
+          "dress_shirt",
+          "jacket_light",
+          "gloves_light",
+          "pants",
+          "fanny",
+          "socks",
+          "sneakers",
+          "roadmap",
+          "restaurantmap",
+          "shavingkit",
+          "mess_kit",
+          "aluminum_foil",
+          "can_chowder",
+          "apple_cider",
+          "fruit_leather",
+          "suitcase_m"
+        ],
+        "entries": [ { "group": "charged_cell_phone" } ]
+      },
       "male": [ "boxer_shorts" ],
       "female": [ "bra", "panties" ]
     }
@@ -273,42 +275,32 @@
   },
   {
     "type": "profession",
-    "ident": "golfer",
-    "name": "Golfer",
-    "description": "A birdie is one under par, but how much is a zombie?  Your clubhouse was overrun by the undead, and you fled with your trusty driving wedge.",
-    "points": 0,
-    "items": {
-      "both": [ "hat_ball", "dress_shirt", "pants", "socks", "sneakers", "golf_club" ],
-      "male": [ "briefs" ],
-      "female": [ "sports_bra", "panties" ]
-    }
-  },
-  {
-    "type": "profession",
     "ident": "prep_student",
     "name": "Preppy Student",
     "description": "Your parents were busy, important people, who wanted you to have every advantage and pushed you to be \"successful,\" whatever that meant.  If only they'd ever let you experience childhood, or ever shown you their love.  You're certainly not getting either one now.",
     "points": 1,
     "skills": [ { "level": 1, "name": "speech" } ],
     "items": {
-      "both": [
-        "dress_shirt",
-        "jacket_light",
-        "pants",
-        "socks",
-        "dress_shoes",
-        "skinny_tie",
-        "tieclip",
-        "fancy_sunglasses",
-        "knit_scarf",
-        "wristwatch",
-        "mbag",
-        "water_mineral",
-        "cell_phone",
-        "money_bundle",
-        "adderall",
-        "manual_business"
-      ],
+      "both": {
+        "items": [
+          "dress_shirt",
+          "jacket_light",
+          "pants",
+          "socks",
+          "dress_shoes",
+          "skinny_tie",
+          "tieclip",
+          "fancy_sunglasses",
+          "knit_scarf",
+          "wristwatch",
+          "mbag",
+          "water_mineral",
+          "money_bundle",
+          "adderall",
+          "manual_business"
+        ],
+        "entries": [ { "group": "charged_cell_phone" } ]
+      },
       "male": [ "briefs" ],
       "female": [ "panties" ]
     }

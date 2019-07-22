@@ -1,5 +1,6 @@
 #include "animation.h"
 
+#include "avatar.h"
 #include "game.h"
 #include "map.h"
 #include "monster.h"
@@ -11,18 +12,18 @@
 #include "weather.h"
 #include "creature.h"
 #include "cursesdef.h"
-#include "enums.h"
 #include "game_constants.h"
 #include "posix_time.h"
 #include "translations.h"
 #include "type_id.h"
+#include "explosion.h"
+#include "point.h"
 
 #if defined(TILES)
 #include <memory>
 
 #include "cata_tiles.h" // all animation functions will be pushed out to a cata_tiles function in some manner
-
-extern std::unique_ptr<cata_tiles> tilecontext; // obtained from sdltiles.cpp
+#include "sdltiles.h"
 #endif
 
 #include <algorithm>
@@ -32,16 +33,14 @@ extern std::unique_ptr<cata_tiles> tilecontext; // obtained from sdltiles.cpp
 #include <utility>
 #include <vector>
 
-bool is_valid_in_w_terrain( int x, int y ); // see game.cpp
-
 namespace
 {
 
 class basic_animation
 {
     public:
-        basic_animation( const long scale ) :
-            delay{ 0, get_option<int>( "ANIMATION_DELAY" ) * scale * 1000000l } {
+        basic_animation( const int scale ) :
+            delay{ 0, get_option<int>( "ANIMATION_DELAY" ) * scale * 1000000L } {
         }
 
         void draw() const {
@@ -425,7 +424,7 @@ void draw_bullet_curses( map &m, const tripoint &t, const char bullet, const tri
     bullet_animation().progress();
 }
 
-} ///namespace
+} // namespace
 
 #if defined(TILES)
 /* Bullet Animation -- Maybe change this to animate the ammo itself flying through the air?*/

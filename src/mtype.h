@@ -22,7 +22,6 @@ template <typename E> struct enum_traits;
 struct dealt_projectile_attack;
 struct species_type;
 
-enum field_id : int;
 enum body_part : int;
 enum m_size : int;
 
@@ -33,7 +32,7 @@ using bodytype_id = std::string;
 class JsonArray;
 class JsonObject;
 
-typedef std::string itype_id;
+using itype_id = std::string;
 
 // These are triggers which may affect the monster's anger or morale.
 // They are handled in monster::check_triggers(), in monster.cpp
@@ -114,6 +113,7 @@ enum m_flag : int {
     MF_NO_BREATHE,          // Creature can't drown and is unharmed by gas, smoke, or poison
     MF_REGENERATES_50,      // Monster regenerates very quickly over time
     MF_REGENERATES_10,      // Monster regenerates quickly over time
+    MF_REGENERATES_1,       // Monster regenerates slowly over time
     MF_REGENERATES_IN_DARK, // Monster regenerates very quickly in poorly lit tiles
     MF_FLAMMABLE,           // Monster catches fire, burns, and spreads fire to nearby objects
     MF_REVIVES,             // Monster corpse will revive after a short period of time
@@ -153,6 +153,8 @@ enum m_flag : int {
     MF_CATFOOD,             // This monster will become friendly when fed cat food.
     MF_CATTLEFODDER,        // This monster will become friendly when fed cattle fodder.
     MF_BIRDFOOD,            // This monster will become friendly when fed bird food.
+    MF_CANPLAY,             // This monster can be played with if it's a pet.
+    MF_PET_MOUNTABLE,       // This monster can be mounted and ridden when tamed.
     MF_DOGFOOD,             // This monster will become friendly when fed dog food.
     MF_MILKABLE,            // This monster is milkable.
     MF_NO_BREED,            // This monster doesn't breed, even though it has breed data
@@ -162,6 +164,7 @@ enum m_flag : int {
     MF_ELECTRIC_FIELD,      // This monster is surrounded by an electrical field that ignites flammable liquids near it
     MF_LOUDMOVES,           // This monster makes move noises as if ~2 sizes louder, even if flying.
     MF_CAN_OPEN_DOORS,      // This monster can open doors.
+    MF_STUN_IMMUNE,         // This monster is immune to the stun effect
     MF_MAX                  // Sets the length of the flags - obviously must be LAST
 };
 
@@ -337,13 +340,14 @@ struct mtype {
         bool in_species( const species_id &spec ) const;
         bool in_species( const species_type &spec ) const;
         //Used for corpses.
-        field_id bloodType() const;
-        field_id gibType() const;
+        field_type_id bloodType() const;
+        field_type_id gibType() const;
         // The item id of the meat items that are produced by this monster (or "null")
         // if there is no matching item type. e.g. "veggy" for plant monsters.
         itype_id get_meat_itype() const;
         int get_meat_chunks_count() const;
         std::string get_description() const;
+        std::string get_footsteps() const;
 
         // Historically located in monstergenerator.cpp
         void load( JsonObject &jo, const std::string &src );

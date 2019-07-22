@@ -8,6 +8,7 @@
 #include <memory>
 #include <utility>
 
+#include "avatar.h"
 #include "cata_utility.h"
 #include "debug.h"
 #include "filesystem.h"
@@ -19,7 +20,6 @@
 #include "options.h"
 #include "output.h"
 #include "path_info.h"
-#include "player.h"
 #include "string_formatter.h"
 #include "string_input_popup.h"
 #include "translations.h"

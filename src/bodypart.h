@@ -12,6 +12,7 @@
 #include "string_id.h"
 
 class JsonObject;
+template <typename E> struct enum_traits;
 
 // The order is important ; pldata.h has to be in the same order
 enum body_part : int {
@@ -28,6 +29,11 @@ enum body_part : int {
     bp_foot_l,
     bp_foot_r,
     num_bp
+};
+
+template<>
+struct enum_traits<body_part> {
+    static constexpr auto last = body_part::num_bp;
 };
 
 enum class side : int {

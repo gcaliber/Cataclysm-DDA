@@ -13,7 +13,6 @@
 #include "units.h"
 #include "bodypart.h"
 #include "calendar.h"
-#include "enums.h"
 #include "game_constants.h"
 #include "inventory.h"
 #include "item.h"
@@ -21,8 +20,9 @@
 #include "player.h"
 #include "material.h"
 #include "type_id.h"
+#include "point.h"
 
-typedef statistics<bool> firing_statistics;
+using firing_statistics = statistics<bool>;
 
 template < class T >
 std::ostream &operator <<( std::ostream &os, const std::vector<T> &v )
@@ -208,7 +208,7 @@ static void test_fast_shooting( npc &shooter, const int moves, float hit_rate )
     CHECK( fast_stats_upper[1].avg() < hit_rate_cap );
 }
 
-void assert_encumbrance( npc &shooter, int encumbrance )
+static void assert_encumbrance( npc &shooter, int encumbrance )
 {
     for( const body_part bp : all_body_parts ) {
         INFO( "Body Part: " << body_part_name( bp ) );

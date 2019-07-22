@@ -12,6 +12,7 @@
 #include <list>
 #include <unordered_map>
 #include <utility>
+#include <functional>
 
 #include "calendar.h"
 #include "line.h"
@@ -22,26 +23,29 @@
 #include "color.h"
 #include "creature.h"
 #include "cursesdef.h"
-#include "enums.h"
 #include "inventory.h"
 #include "item_location.h"
-#include "translations.h"
 #include "string_formatter.h"
 #include "string_id.h"
 #include "material.h"
 #include "type_id.h"
+#include "faction.h"
+#include "int_id.h"
+#include "item.h"
+#include "point.h"
 
 struct bionic_data;
 class JsonObject;
 class JsonIn;
 class JsonOut;
-class item;
 struct overmap_location;
 class Character;
-class faction;
 class mission;
 class vehicle;
 struct pathfinding_settings;
+class monfaction;
+class npc_class;
+struct mission_type;
 
 enum game_message_type : int;
 class gun_mode;
@@ -85,6 +89,7 @@ enum npc_attitude : int {
     NPCATT_LEGACY_5,
     NPCATT_ACTIVITY, // Perform a mission activity
     NPCATT_FLEE_TEMP, // Get away from the player for a while
+    NPCATT_RECOVER_GOODS, // Chase the player to demand stolen goods back
     NPCATT_END
 };
 
@@ -281,7 +286,8 @@ enum class ally_rule {
     avoid_doors = 2048,
     hold_the_line = 4096,
     ignore_noise = 8192,
-    forbid_engage = 16384
+    forbid_engage = 16384,
+    follow_distance_2 = 32768
 };
 
 struct ally_rule_data {
@@ -394,6 +400,13 @@ const std::unordered_map<std::string, ally_rule_data> ally_rule_strs = { {
                 ally_rule::forbid_engage,
                 "<ally_rule_forbid_engage_true_text>",
                 "<ally_rule_forbid_engage_false_text>"
+            }
+        },
+        {
+            "follow_distance_2", {
+                ally_rule::follow_distance_2,
+                "<ally_rule_follow_distance_2_true_text>",
+                "<ally_rule_follow_distance_2_false_text>"
             }
         }
     }
@@ -642,6 +655,9 @@ enum talk_topic_enum {
     NUM_TALK_TOPICS
 };
 
+// Function for conversion of legacy topics, defined in savegame_legacy.cpp
+std::string convert_talk_topic( talk_topic_enum const old_value );
+
 struct npc_chatbin {
     /**
      * Add a new mission to the available missions (@ref missions). For compatibility it silently
@@ -686,7 +702,7 @@ struct npc_chatbin {
 class npc_template;
 struct epilogue;
 
-typedef std::map<std::string, epilogue> epilogue_map;
+using epilogue_map = std::map<std::string, epilogue>;
 
 class npc : public player
 {
@@ -705,7 +721,6 @@ class npc : public player
         bool is_npc() const override {
             return true;
         }
-
         void load_npc_template( const string_id<npc_template> &ident );
 
         // Generating our stats, etc.
@@ -741,10 +756,6 @@ class npc : public player
         void starting_weapon( const npc_class_id &type );
 
         // Save & load
-        // Overloaded from player
-        void load_info( std::string data ) override;
-        std::string save_info() const override;
-
         void deserialize( JsonIn &jsin ) override;
         void serialize( JsonOut &jsout ) const override;
 
@@ -786,6 +797,8 @@ class npc : public player
         // Faction version number
         int get_faction_ver() const;
         void set_faction_ver( int new_version );
+        bool has_faction_relationship( const player &guy,
+                                       const npc_factions::relationship flag ) const;
         // We want to kill/mug/etc the player
         bool is_enemy() const;
         // Traveling w/ player (whether as a friend or a slave)
@@ -849,6 +862,12 @@ class npc : public player
         bool took_painkiller() const;
         void use_painkiller();
         void activate_item( int position );
+        bool has_identified( const std::string & ) const override {
+            return true;
+        }
+        bool has_artifact_with( const art_effect_passive ) const override {
+            return false;
+        }
         /** Is the item safe or does the NPC trust you enough? */
         bool will_accept_from_player( const item &it ) const;
 
@@ -930,6 +949,8 @@ class npc : public player
 
         void handle_sound( int priority, const std::string &description, int heard_volume,
                            const tripoint &spos );
+
+        void witness_thievery( item *it );
 
         /* shift() works much like monster::shift(), and is called when the player moves
          * from one submap to an adjacent submap.  It updates our position (shifting by
@@ -1100,7 +1121,6 @@ class npc : public player
         // Note: NPCs use a different speed rating than players
         // Because they can't run yet
         float speed_rating() const override;
-
         /**
          * Note: this places NPC on a given position in CURRENT MAP coordinates.
          * Do not use when placing a NPC in mapgen.
@@ -1109,9 +1129,14 @@ class npc : public player
         void travel_overmap( const tripoint &pos );
         npc_attitude get_attitude() const;
         void set_attitude( npc_attitude new_attitude );
+        void set_mission( npc_mission new_mission );
+        bool has_activity() const;
+        npc_attitude get_previous_attitude();
+        npc_mission get_previous_mission();
+        void revert_after_activity();
 
         // #############   VALUES   ################
-
+        std::string current_activity = "";
         npc_class_id myclass; // What's our archetype?
         // A temp variable used to inform the game which npc json to use as a template
         std::string idz;
@@ -1124,6 +1149,7 @@ class npc : public player
         // 0 - allies may be in your_followers faction; NPCATT_FOLLOW is an ally (legacy)
         int faction_api_version = 2;  // faction API versioning
         npc_attitude attitude; // What we want to do to the player
+        npc_attitude previous_attitude = NPCATT_NULL;
         /**
          * Global submap coordinates of the submap containing the npc.
          * Use global_*_location to get the global position.
@@ -1165,13 +1191,13 @@ class npc : public player
          * if no goal exist, this is no_goal_point.
          */
         tripoint goal;
-        std::vector<tripoint> omt_path;
-
+        tripoint wander_pos; // Not actually used (should be: wander there when you hear a sound)
+        int wander_time;
+        item *known_stolen_item = nullptr; // the item that the NPC wants the player to drop or barter for.
         /**
          * Location and index of the corpse we'd like to pulp (if any).
          */
         cata::optional<tripoint> pulp_location;
-
         time_point restock;
         bool fetching_item;
         bool has_new_items; // If true, we have something new and should re-equip
@@ -1191,6 +1217,7 @@ class npc : public player
         companion_mission_time_ret; //When you are expected to return for calculated/variable mission returns
         inventory companion_mission_inv; //Inventory that is added and dropped on mission
         npc_mission mission;
+        npc_mission previous_mission = NPC_MISSION_NULL;
         npc_personality personality;
         npc_opinion op_of_u;
         npc_chatbin chatbin;
@@ -1212,6 +1239,10 @@ class npc : public player
          * Retroactively update npc.
          */
         void on_load();
+        /**
+         * Update body, but throttled.
+         */
+        void npc_update_body();
 
         /// Set up (start) a companion mission.
         void set_companion_mission( npc &p, const std::string &mission_id );

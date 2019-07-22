@@ -1,8 +1,10 @@
+#include <functional>
+#include <vector>
+
 #include "catch/catch.hpp"
-
 #include "test_statistics.h"
-
 #include "rng.h"
+#include "optional.h"
 
 static void check_remainder( float proportion )
 {
@@ -55,9 +57,23 @@ TEST_CASE( "x_in_y_distribution" )
     for( float y = 0.1; y < 500.0; y += y_increment ) {
         y_increment *= 1.1;
         float x_increment = 0.1;
+        // NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
         for( float x = 0.1; x < y; x += x_increment ) {
             check_x_in_y( x, y );
             x_increment *= 1.1;
         }
     }
+}
+
+TEST_CASE( "random_entry_preserves_constness" )
+{
+    const std::vector<int> v0{ 4321 };
+    int i0 = *random_entry_opt( v0 );
+    CHECK( i0 == 4321 );
+
+    std::vector<int> v1{ 1234 };
+    int &i1 = *random_entry_opt( v1 );
+    CHECK( i1 == 1234 );
+    i1 = 5678;
+    CHECK( v1[0] == 5678 );
 }

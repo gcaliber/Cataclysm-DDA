@@ -1,5 +1,6 @@
 #include "ui.h"
 
+#include <assert.h>
 #include <cctype>
 #include <climits>
 #include <cstdlib>
@@ -7,6 +8,7 @@
 #include <iterator>
 #include <memory>
 
+#include "avatar.h"
 #include "cata_utility.h"
 #include "catacharset.h"
 #include "debug.h"
@@ -26,19 +28,6 @@
 * \defgroup UI "The UI Menu."
 * @{
 */
-
-////////////////////////////////////
-int getfoldedwidth( const std::vector<std::string> &foldedstring )
-{
-    int ret = 0;
-    for( auto &i : foldedstring ) {
-        int width = utf8_width( i );
-        if( width > ret ) {
-            ret = width;
-        }
-    }
-    return ret;
-}
 
 uilist::uilist()
 {
@@ -505,8 +494,8 @@ void uilist::setup()
                 popup( "Can't display menu options, 0 %d available screen rows are occupied\nThis is probably a bug.\n",
                        TERMY );
             } else {
-                popup( "Can't display menu options, %lu %d available screen rows are occupied by\n'%s\n(snip)\n%s'\nThis is probably a bug.\n",
-                       static_cast<unsigned long>( textformatted.size() ), TERMY, textformatted[ 0 ].c_str(),
+                popup( "Can't display menu options, %zu %d available screen rows are occupied by\n'%s\n(snip)\n%s'\nThis is probably a bug.\n",
+                       textformatted.size(), TERMY, textformatted[ 0 ].c_str(),
                        textformatted[ textformatted.size() - 1 ].c_str() );
             }
         }
