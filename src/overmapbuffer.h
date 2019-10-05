@@ -19,6 +19,7 @@
 #include "point.h"
 #include "string_id.h"
 
+class character_id;
 struct mongroup;
 class monster;
 class npc;
@@ -75,9 +76,17 @@ struct camp_reference {
     int get_distance_from_bounds() const;
 };
 
-struct overmap_with_local_coordinates {
-    overmap *overmap_pointer;
-    tripoint coordinates;
+struct overmap_with_local_coords {
+    overmap *om;
+    tripoint local;
+
+    bool operator!() const {
+        return !om;
+    }
+
+    explicit operator bool() const {
+        return !!om;
+    }
 };
 
 /*
@@ -126,7 +135,8 @@ class overmapbuffer
          * Uses global overmap terrain coordinates, creates the
          * overmap if needed.
          */
-        oter_id &ter( const tripoint &p );
+        const oter_id &ter( const tripoint &p );
+        void ter_set( const tripoint &p, const oter_id &id );
         /**
          * Uses global overmap terrain coordinates.
          */
@@ -236,7 +246,7 @@ class overmapbuffer
          * Returns NULL if the npc could not be found.
          * Searches all loaded overmaps.
          */
-        std::shared_ptr<npc> find_npc( int id );
+        std::shared_ptr<npc> find_npc( character_id id );
         /**
          * Get all NPCs active on the overmap
          */
@@ -245,7 +255,7 @@ class overmapbuffer
          * Find npc by id and if found, erase it from the npc list
          * and return it ( or return nullptr if not found ).
          */
-        std::shared_ptr<npc> remove_npc( int id );
+        std::shared_ptr<npc> remove_npc( character_id id );
         /**
          * Adds the npc to an overmap ( based on the npcs current location )
          * and stores it there. The overmap takes ownership of the pointer.
@@ -307,33 +317,19 @@ class overmapbuffer
                                bool existing_overmaps_only = false,
                                const cata::optional<overmap_special_id> &om_special = cata::nullopt );
 
-        /* These 4 functions return the overmap that contains the given
-         * overmap terrain coordinate.
+        /* These functions return the overmap that contains the given
+         * overmap terrain coordinate, and the local coordinates of that point
+         * within the overmap (for use with overmap APIs).
          * get_existing_om_global will not create a new overmap and
-         * instead return NULL, if the requested overmap does not yet exist.
+         * if the requested overmap does not yet exist it returns
+         * { nullptr, tripoint_zero }.
          * get_om_global creates a new overmap if needed.
-         *
-         * The parameters x and y will be cropped to be local to the
-         * returned overmap, the parameter p will not be changed.
          */
-        overmap *get_existing_om_global( int &x, int &y );
-        overmap *get_existing_om_global( const point &p );
-        overmap *get_existing_om_global( const tripoint &p );
-        overmap &get_om_global( int &x, int &y );
-        overmap &get_om_global( const point &p );
-        overmap &get_om_global( const tripoint &p );
+        overmap_with_local_coords get_existing_om_global( const point &p );
+        overmap_with_local_coords get_existing_om_global( const tripoint &p );
+        overmap_with_local_coords get_om_global( const point &p );
+        overmap_with_local_coords get_om_global( const tripoint &p );
 
-        /**
-        * These two functions return the overmap that contains the given
-        * global overmap terrain coordinate. They additionally will reproject
-        * and return the provided global overmap terrain coordinate to the
-        * local coordinate system, so that it can be used with that overmap.
-        * They follow the same semantics as the get_om_global and
-        * get_existing_om_global regarding creating new overmaps.
-        */
-        overmap_with_local_coordinates get_om_global_with_coordinates( const tripoint &p );
-        cata::optional<overmap_with_local_coordinates> get_existing_om_global_with_coordinates(
-            const tripoint &p );
         /**
          * Pass global overmap coordinates (same as @ref get).
          * @returns true if the buffer has a overmap with
@@ -445,9 +441,9 @@ class overmapbuffer
          * @param force If true, placement will bypass the checks for valid placement.
          * @returns True if the special was placed, else false.
          */
-        bool place_special( const overmap_special &special, const tripoint &location,
+        bool place_special( const overmap_special &special, const tripoint &p,
                             om_direction::type dir,
-                            const bool must_be_unexplored, const bool force );
+                            bool must_be_unexplored, bool force );
         /**
          * Place the specified overmap special using the overmap's placement algorithm. Intended to be used
          * when you have a special that you want placed but it should be placed similarly to as if it were
@@ -498,7 +494,7 @@ class overmapbuffer
          * overmap terrain coordinates.
          * This function may create a new overmap if needed.
          */
-        bool check_ot( const std::string &otype, ot_match_type match_type, const tripoint &loc );
+        bool check_ot( const std::string &otype, ot_match_type match_type, const tripoint &p );
         bool check_overmap_special_type( const overmap_special_id &id, const tripoint &loc );
 
         /**
@@ -522,7 +518,7 @@ class overmapbuffer
          * The location is in absolute submap coordinates, the radius is in the same system.
          * The overmaps are returned sorted by distance from the provided location (closest first).
          */
-        std::vector<overmap *> get_overmaps_near( const point &location, int radius );
+        std::vector<overmap *> get_overmaps_near( const point &p, int radius );
         std::vector<overmap *> get_overmaps_near( const tripoint &location, int radius );
 };
 

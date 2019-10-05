@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <memory>
 #include <numeric>
 #include <sstream>
 #include <unordered_map>
@@ -96,7 +97,9 @@ static const std::unordered_map<std::string, vpart_bitflags> vpart_bitflag_map =
     { "RECHARGE", VPFLAG_RECHARGE },
     { "VISION", VPFLAG_EXTENDS_VISION },
     { "ENABLED_DRAINS_EPOWER", VPFLAG_ENABLED_DRAINS_EPOWER },
+    { "AUTOCLAVE", VPFLAG_AUTOCLAVE },
     { "WASHING_MACHINE", VPFLAG_WASHING_MACHINE },
+    { "DISHWASHER", VPFLAG_DISHWASHER },
     { "FLUIDTANK", VPFLAG_FLUIDTANK },
     { "REACTOR", VPFLAG_REACTOR },
     { "RAIL", VPFLAG_RAIL },
@@ -172,7 +175,12 @@ static void parse_vp_reqs( JsonObject &obj, const std::string &id, const std::st
         skills.emplace( skill_id( cur.get_string( 0 ) ), cur.size() >= 2 ? cur.get_int( 1 ) : 1 );
     }
 
-    assign( src, "time", moves );
+    if( src.has_int( "time" ) ) {
+        moves = src.get_int( "time" );
+    } else if( src.has_string( "time" ) ) {
+        moves = to_moves<int>( read_from_json_string<time_duration>( *src.get_raw( "time" ),
+                               time_duration::units ) );
+    }
 
     if( src.has_string( "using" ) ) {
         reqs = { { requirement_id( src.get_string( "using" ) ), 1 } };
@@ -325,8 +333,13 @@ void vpart_info::load( JsonObject &jo, const std::string &src )
     assign( jo, "size", def.size );
     assign( jo, "difficulty", def.difficulty );
     assign( jo, "bonus", def.bonus );
+    assign( jo, "cargo_weight_modifier", def.cargo_weight_modifier );
     assign( jo, "flags", def.flags );
     assign( jo, "description", def.description );
+
+    assign( jo, "comfort", def.comfort );
+    assign( jo, "floor_bedding_warmth", def.floor_bedding_warmth );
+    assign( jo, "bonus_fire_warmth_feet", def.bonus_fire_warmth_feet );
 
     if( jo.has_member( "transform_terrain" ) ) {
         JsonObject jttd = jo.get_object( "transform_terrain" );
@@ -397,8 +410,6 @@ void vpart_info::load( JsonObject &jo, const std::string &src )
     if( jo.has_member( "damage_reduction" ) ) {
         JsonObject dred = jo.get_object( "damage_reduction" );
         def.damage_reduction = load_damage_array( dred );
-    } else {
-        def.damage_reduction.fill( 0.0f );
     }
 
     if( def.has_flag( "ENGINE" ) ) {
@@ -434,12 +445,6 @@ void vpart_info::finalize()
     DynamicDataLoader::get_instance().load_deferred( deferred );
 
     for( auto &e : vpart_info_all ) {
-        // if part name specified ensure it is translated
-        // otherwise the name of the base item will be used
-        if( !e.second.name_.empty() ) {
-            e.second.name_ = _( e.second.name_ );
-        }
-
         if( e.second.folded_volume > 0_ml ) {
             e.second.set_flag( "FOLDABLE" );
         }
@@ -665,6 +670,10 @@ void vpart_info::check()
                 }
             }
         }
+        if( part.has_flag( "WHEEL" ) && !base_item_type.wheel ) {
+            debugmsg( "vehicle part %s has the WHEEL flag, but base item %s is not a wheel. THIS WILL CRASH!",
+                      part.id.c_str(), part.item );
+        }
         for( auto &q : part.qualities ) {
             if( !q.first.is_valid() ) {
                 debugmsg( "vehicle part %s has undefined tool quality %s", part.id.c_str(), q.first.c_str() );
@@ -705,21 +714,22 @@ const std::map<vpart_id, vpart_info> &vpart_info::all()
 std::string vpart_info::name() const
 {
     if( name_.empty() ) {
-        name_ = item::nname( item ); // cache on first request
+        return item::nname( item );
+    } else {
+        return name_.translated();
     }
-    return name_;
 }
 
-int vpart_info::format_description( std::ostringstream &msg, const std::string &format_color,
+int vpart_info::format_description( std::ostringstream &msg, const nc_color &format_color,
                                     int width ) const
 {
     int lines = 1;
     msg << _( "<color_white>Description</color>\n" );
-    msg << "> " << format_color;
+    msg << "> " << "<color_" << string_from_color( format_color ) << ">";
 
     std::ostringstream long_descrip;
     if( ! description.empty() ) {
-        long_descrip << _( description );
+        long_descrip << description;
     }
     for( const auto &flagid : flags ) {
         if( flagid == "ALARMCLOCK" || flagid == "WATCH" ) {
@@ -762,8 +772,8 @@ int vpart_info::format_description( std::ostringstream &msg, const std::string &
     const quality_id quality_jack( "JACK" );
     const quality_id quality_lift( "LIFT" );
     for( const auto &qual : qualities ) {
-        msg << "> " << format_color << string_format( _( "Has level %1$d %2$s quality" ),
-                qual.second, qual.first.obj().name );
+        msg << "> " << "<color_" << string_from_color( format_color ) << ">" << string_format(
+                _( "Has level %1$d %2$s quality" ), qual.second, qual.first.obj().name );
         if( qual.first == quality_jack || qual.first == quality_lift ) {
             msg << string_format( _( " and is rated at %1$d %2$s" ),
                                   static_cast<int>( convert_weight( qual.second * TOOL_LIFT_FACTOR ) ),
@@ -804,38 +814,38 @@ bool vpart_info::is_repairable() const
     return !repair_requirements().is_empty();
 }
 
-static int scale_time( const std::map<skill_id, int> &sk, int mv, const Character &ch )
+static int scale_time( const std::map<skill_id, int> &sk, int mv, const player &p )
 {
     if( sk.empty() ) {
         return mv;
     }
 
-    const int lvl = std::accumulate( sk.begin(), sk.end(), 0, [&ch]( int lhs,
+    const int lvl = std::accumulate( sk.begin(), sk.end(), 0, [&p]( int lhs,
     const std::pair<skill_id, int> &rhs ) {
-        return lhs + std::max( std::min( ch.get_skill_level( rhs.first ), MAX_SKILL ) - rhs.second,
+        return lhs + std::max( std::min( p.get_skill_level( rhs.first ), MAX_SKILL ) - rhs.second,
                                0 );
     } );
     // 10% per excess level (reduced proportionally if >1 skill required) with max 50% reduction
     // 10% reduction per assisting NPC
-    const std::vector<npc *> helpers = g->u.get_crafting_helpers();
-    const int helpersize = g->u.get_num_crafting_helpers( 3 );
+    const std::vector<npc *> helpers = p.get_crafting_helpers();
+    const int helpersize = p.get_num_crafting_helpers( 3 );
     return mv * ( 1.0 - std::min( static_cast<double>( lvl ) / sk.size() / 10.0,
-                                  0.5 ) ) * ( 1 - ( helpersize / 10 ) );
+                                  0.5 ) ) * ( 1 - ( helpersize / 10.0 ) );
 }
 
-int vpart_info::install_time( const Character &ch ) const
+int vpart_info::install_time( const player &p ) const
 {
-    return scale_time( install_skills, install_moves, ch );
+    return scale_time( install_skills, install_moves, p );
 }
 
-int vpart_info::removal_time( const Character &ch ) const
+int vpart_info::removal_time( const player &p ) const
 {
-    return scale_time( removal_skills, removal_moves, ch );
+    return scale_time( removal_skills, removal_moves, p );
 }
 
-int vpart_info::repair_time( const Character &ch ) const
+int vpart_info::repair_time( const player &p ) const
 {
-    return scale_time( repair_skills, repair_moves, ch );
+    return scale_time( repair_skills, repair_moves, p );
 }
 
 /**
@@ -1059,7 +1069,7 @@ void vehicle_prototype::finalize()
         // Calls the default constructor to create an empty vehicle. Calling the constructor with
         // the type as parameter would make it look up the type in the map and copy the
         // (non-existing) blueprint.
-        proto.blueprint.reset( new vehicle() );
+        proto.blueprint = std::make_unique<vehicle>();
         vehicle &blueprint = *proto.blueprint;
         blueprint.type = id;
         blueprint.name = _( proto.name );

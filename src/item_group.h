@@ -155,6 +155,7 @@ class Item_modifier
          * Charges to spawn the item with, if this turns out to
          * be negative, the default charges are used.
          */
+        std::pair<int, int> dirt;
         std::pair<int, int> charges;
         /**
          * Ammo for guns. If NULL the gun spawns without ammo.
@@ -184,7 +185,7 @@ class Item_modifier
         Item_modifier();
         Item_modifier( Item_modifier && ) = default;
 
-        void modify( item &it ) const;
+        void modify( item &new_item ) const;
         void check_consistency() const;
         bool remove_item( const Item_tag &itemid );
 
@@ -228,7 +229,7 @@ class Single_item_creator : public Item_spawn_data
         Type type;
         cata::optional<Item_modifier> modifier;
 
-        void inherit_ammo_mag_chances( const int ammo, const int mag );
+        void inherit_ammo_mag_chances( int ammo, int mag );
 
         ItemList create( const time_point &birthday, RecursionList &rec ) const override;
         item create_single( const time_point &birthday, RecursionList &rec ) const override;

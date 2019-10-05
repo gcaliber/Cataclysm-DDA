@@ -122,8 +122,7 @@ bool handle_liquid_from_ground( map_stack::iterator on_ground,
 }
 
 bool handle_liquid_from_container( std::list<item>::iterator in_container,
-                                   item &container,
-                                   int radius )
+                                   item &container, int radius )
 {
     // TODO: not all code paths on handle_liquid consume move points, fix that.
     const int old_charges = in_container->charges;
@@ -161,16 +160,20 @@ static bool get_liquid_target( item &liquid, item *const source, const int radiu
 
     const std::string liquid_name = liquid.display_name( liquid.charges );
     if( source_pos != nullptr ) {
-        menu.text = string_format( _( "What to do with the %s from %s?" ), liquid_name,
+        //~ %1$s: liquid name, %2$s: terrain name
+        menu.text = string_format( pgettext( "liquid", "What to do with the %1$s from %2$s?" ), liquid_name,
                                    g->m.name( *source_pos ) );
     } else if( source_veh != nullptr ) {
-        menu.text = string_format( _( "What to do with the %s from the %s?" ), liquid_name,
-                                   source_veh->name );
+        //~ %1$s: liquid name, %2$s: vehicle name
+        menu.text = string_format( pgettext( "liquid", "What to do with the %1$s from %2$s?" ), liquid_name,
+                                   source_veh->disp_name() );
     } else if( source_mon != nullptr ) {
-        menu.text = string_format( _( "What to do with the %s from the %s?" ), liquid_name,
-                                   source_mon->get_name() );
+        //~ %1$s: liquid name, %2$s: monster name
+        menu.text = string_format( pgettext( "liquid", "What to do with the %1$s from the %2$s?" ),
+                                   liquid_name, source_mon->get_name() );
     } else {
-        menu.text = string_format( _( "What to do with the %s?" ), liquid_name );
+        //~ %s: liquid name
+        menu.text = string_format( pgettext( "liquid", "What to do with the %s?" ), liquid_name );
     }
     std::vector<std::function<void()>> actions;
 

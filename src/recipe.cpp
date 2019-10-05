@@ -489,7 +489,7 @@ std::string recipe::result_name() const
     return name;
 }
 
-const std::function<bool( const item & )> recipe::get_component_filter() const
+std::function<bool( const item & )> recipe::get_component_filter() const
 {
     const item result = create_result();
 
@@ -539,7 +539,7 @@ const std::string &recipe::get_blueprint() const
     return blueprint;
 }
 
-const std::string &recipe::blueprint_name() const
+const translation &recipe::blueprint_name() const
 {
     return bp_name;
 }

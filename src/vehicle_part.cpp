@@ -31,7 +31,7 @@ static const itype_id fuel_type_battery( "battery" );
  *                              VEHICLE_PART
  *-----------------------------------------------------------------------------*/
 vehicle_part::vehicle_part()
-    : mount( 0, 0 ), id( vpart_id::NULL_ID() ) {}
+    : id( vpart_id::NULL_ID() ) {}
 
 vehicle_part::vehicle_part( const vpart_id &vp, const point &dp, item &&obj )
     : mount( dp ), id( vp ), base( std::move( obj ) )
@@ -103,8 +103,7 @@ std::string vehicle_part::name( bool with_prefix ) const
     }
 
     if( with_prefix ) {
-        res.insert( 0, "<color_" + string_from_color( this->base.damage_color() ) + ">" +
-                    this->base.damage_symbol() + "</color> " );
+        res.insert( 0, colorize( base.damage_symbol(), base.damage_color() ) + " " );
     }
     return res;
 }
@@ -122,6 +121,11 @@ int vehicle_part::hp() const
 int vehicle_part::damage() const
 {
     return base.damage();
+}
+
+int vehicle_part::max_damage() const
+{
+    return base.max_damage();
 }
 
 int vehicle_part::damage_level( int max ) const
@@ -400,7 +404,7 @@ int vehicle_part::wheel_width() const
 
 npc *vehicle_part::crew() const
 {
-    if( is_broken() || crew_id < 0 ) {
+    if( is_broken() || !crew_id.is_valid() ) {
         return nullptr;
     }
 
@@ -425,7 +429,7 @@ bool vehicle_part::set_crew( const npc &who )
 
 void vehicle_part::unset_crew()
 {
-    crew_id = -1;
+    crew_id = character_id();
 }
 
 void vehicle_part::reset_target( const tripoint &pos )

@@ -94,6 +94,10 @@ void water_source( player &p, const tripoint &examp );
 void clean_water_source( player &, const tripoint &examp );
 void kiln_empty( player &p, const tripoint &examp );
 void kiln_full( player &p, const tripoint &examp );
+void arcfurnace_empty( player &p, const tripoint &examp );
+void arcfurnace_full( player &p, const tripoint &examp );
+void autoclave_empty( player &p, const tripoint &examp );
+void autoclave_full( player &, const tripoint &examp );
 void fireplace( player &p, const tripoint &examp );
 void fvat_empty( player &p, const tripoint &examp );
 void fvat_full( player &p, const tripoint &examp );
@@ -127,10 +131,13 @@ std::list<item> get_harvest_items( const itype &type, int plant_count,
 std::vector<seed_tuple> get_seed_entries( const std::vector<item *> &seed_inv );
 int query_seed( const std::vector<seed_tuple> &seed_entries );
 void plant_seed( player &p, const tripoint &examp, const itype_id &seed_id );
-void harvest_plant( player &p, const tripoint &examp );
+void harvest_plant( player &p, const tripoint &examp, bool from_activity = false );
 void fertilize_plant( player &p, const tripoint &tile, const itype_id &fertilizer );
 itype_id choose_fertilizer( player &p, const std::string &pname, bool ask_player );
 ret_val<bool> can_fertilize( player &p, const tripoint &tile, const itype_id &fertilizer );
+
+// Skill training common functions
+void practice_survival_while_foraging( player *p );
 
 } //namespace iexamine
 

@@ -22,6 +22,7 @@
 #include "vehicle.h"
 #include "requirements.h"
 #include "point.h"
+#include "translations.h"
 
 using itype_id = std::string;
 
@@ -68,7 +69,9 @@ enum vpart_bitflags : int {
     VPFLAG_RECHARGE,
     VPFLAG_EXTENDS_VISION,
     VPFLAG_ENABLED_DRAINS_EPOWER,
+    VPFLAG_AUTOCLAVE,
     VPFLAG_WASHING_MACHINE,
+    VPFLAG_DISHWASHER,
     VPFLAG_FLUIDTANK,
     VPFLAG_REACTOR,
     VPFLAG_RAIL,
@@ -171,7 +174,7 @@ class vpart_info
         int durability = 0;
 
         /** A text description of the part as a vehicle part */
-        std::string description;
+        translation description;
 
         /** Damage modifier (percentage) used when damaging other entities upon collision */
         int dmg_mod = 100;
@@ -216,7 +219,7 @@ class vpart_info
         bool legacy = true;
 
         /** Format the description for display */
-        int format_description( std::ostringstream &msg, const std::string &format_color, int width ) const;
+        int format_description( std::ostringstream &msg, const nc_color &format_color, int width ) const;
 
         /** Installation requirements for this component */
         requirement_data install_requirements() const;
@@ -228,7 +231,7 @@ class vpart_info
         int install_moves = to_moves<int>( 1_hours );
 
         /** Installation time (in moves) for this component accounting for player skills */
-        int install_time( const Character &ch ) const;
+        int install_time( const player &p ) const;
 
         /** Requirements for removal of this component */
         requirement_data removal_requirements() const;
@@ -240,7 +243,7 @@ class vpart_info
         int removal_moves = -1;
 
         /** Removal time (in moves) for this component accounting for player skills */
-        int removal_time( const Character &ch ) const;
+        int removal_time( const player &p ) const;
 
         /** Requirements for repair of this component (per level of damage) */
         requirement_data repair_requirements() const;
@@ -255,7 +258,7 @@ class vpart_info
         int repair_moves = to_moves<int>( 1_hours );
 
         /** Repair time (in moves) to fully repair this component, accounting for player skills */
-        int repair_time( const Character &ch ) const;
+        int repair_time( const player &p ) const;
 
         /** @ref item_group this part breaks into when destroyed */
         std::string breaks_into_group = "EMPTY_GROUP";
@@ -266,11 +269,19 @@ class vpart_info
         /** seatbelt (str), muffler (%), horn (vol), light (intensity) */
         int bonus = 0;
 
+        /** cargo weight modifier (percentage) */
+        int cargo_weight_modifier = 100;
+
         /** Flat decrease of damage of a given type. */
-        std::array<float, NUM_DT> damage_reduction;
+        std::array<float, NUM_DT> damage_reduction = {};
 
         /* Contains data for terrain transformer parts */
         transform_terrain_data transform_terrain;
+
+        /*Comfort data for sleeping in vehicles*/
+        int comfort = 0;
+        int floor_bedding_warmth = 0;
+        int bonus_fire_warmth_feet = 300;
 
         /**
          * @name Engine specific functions
@@ -300,7 +311,7 @@ class vpart_info
 
     private:
         /** Name from vehicle part definition which if set overrides the base item name */
-        mutable std::string name_;
+        translation name_;
 
         std::set<std::string> flags;    // flags
         std::bitset<NUM_VPFLAGS> bitflags; // flags checked so often that things slow down due to string cmp

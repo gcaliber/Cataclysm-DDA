@@ -7,6 +7,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <queue>
 
 #include "bodypart.h"
 #include "damage.h"
@@ -14,13 +15,17 @@
 #include "type_id.h"
 #include "ui.h"
 #include "string_id.h"
+#include "translations.h"
+#include "event_bus.h"
 
 struct tripoint;
 class Creature;
 class player;
+class spell;
 class JsonObject;
 class JsonOut;
 class JsonIn;
+class spell;
 class teleporter_list;
 class time_duration;
 class nc_color;
@@ -36,8 +41,15 @@ enum spell_flag {
     VERBAL, // spell makes noise at caster location, mouth encumbrance affects fail %
     SOMATIC, // arm encumbrance affects fail % and casting time (slightly)
     NO_HANDS, // hands do not affect spell energy cost
+    UNSAFE_TELEPORT, // teleport spell risks killing the caster or others
     NO_LEGS, // legs do not affect casting time
     CONCENTRATE, // focus affects spell fail %
+    RANDOM_AOE, // picks random number between min+increment*level and max instead of normal behavior
+    RANDOM_DAMAGE, // picks random number between min+increment*level and max instead of normal behavior
+    RANDOM_DURATION, // picks random number between min+increment*level and max instead of normal behavior
+    RANDOM_TARGET, // picks a random valid target within your range instead of normal behavior.
+    MUTATE_TRAIT, // overrides the mutate spell_effect to use a specific trait_id instead of a category
+    WONDER, // instead of casting each of the extra_spells, it picks N of them and casts them (where N is std::min( damage(), number_of_spells ))
     LAST
 };
 
@@ -56,6 +68,9 @@ enum valid_target {
     target_self,
     target_ground,
     target_none,
+    target_item,
+    target_fd_fire,
+    target_fd_blood,
     _LAST
 };
 
@@ -74,11 +89,27 @@ struct fake_spell {
     // max level this spell can be
     // if null pointer, spell can be up to its own max level
     cata::optional<int> max_level;
+    // level for things that need it
+    int level;
     // target tripoint is source (true) or target (false)
     bool self;
+
+    fake_spell() = default;
     fake_spell( const spell_id &sp_id, bool hit_self = false,
                 const cata::optional<int> &max_level = cata::nullopt ) : id( sp_id ),
         max_level( max_level ), self( hit_self ) {}
+
+    spell get_spell( int input_level ) const;
+
+    void load( JsonObject &jo );
+    void serialize( JsonOut &json ) const;
+    void deserialize( JsonIn &jsin );
+};
+
+class spell_events : public event_subscriber
+{
+    public:
+        void notify( const cata::event & ) override;
 };
 
 class spell_type
@@ -91,11 +122,14 @@ class spell_type
 
         spell_id id;
         // spell name
-        std::string name;
+        translation name;
         // spell description
-        std::string description;
+        translation description;
+        // spell message when cast
+        translation message;
         // spell effect string. used to look up spell function
-        std::string effect;
+        std::string effect_name;
+        std::function<void( const spell &, Creature &, const tripoint & )> effect;
         // extra information about spell effect. allows for combinations for effects
         std::string effect_str;
         // list of additional "spell effects"
@@ -189,10 +223,16 @@ class spell_type
         // max or min casting time
         int final_casting_time;
 
+        // Does leveling this spell lead to learning another spell?
+        std::map<std::string, int> learn_spells;
+
         // what energy do you use to cast this spell
         energy_type energy_source;
 
         damage_type dmg_type;
+
+        // list of valid targets to be affected by the area of effect.
+        enum_bitset<valid_target> effect_targets;
 
         // list of valid targets enum
         enum_bitset<valid_target> valid_targets;
@@ -216,18 +256,29 @@ class spell_type
 class spell
 {
     private:
+        friend class spell_events;
         // basic spell data
-        const spell_type *type;
+        spell_id type;
 
         // once you accumulate enough exp you level the spell
         int experience;
         // returns damage type for the spell
         damage_type dmg_type() const;
 
+        // alternative cast message
+        translation alt_message;
+
+        // minimum damage including levels
+        int min_leveled_damage() const;
+        // minimum aoe including levels
+        int min_leveled_aoe() const;
+        // minimum duration including levels (moves)
+        int min_leveled_duration() const;
+
     public:
         spell() = default;
-        spell( const spell_type *sp, int xp = 0 );
         spell( spell_id sp, int xp = 0 );
+        spell( spell_id sp, translation alt_msg );
 
         // how much exp you need for the spell to gain a level
         int exp_to_next_level() const;
@@ -237,6 +288,7 @@ class spell
         int xp() const;
         // gain some exp
         void gain_exp( int nxp );
+        void set_exp( int nxp );
         // how much xp you get if you successfully cast the spell
         int casting_exp( const player &p ) const;
         // modifier for gaining exp
@@ -283,6 +335,8 @@ class spell
         // check if the spell's class is the same as input
         bool is_spell_class( const trait_id &mid ) const;
 
+        bool in_aoe( const tripoint &source, const tripoint &target ) const;
+
         // get spell id (from type)
         spell_id id() const;
         // get spell class (from type)
@@ -295,6 +349,8 @@ class spell
         std::string name() const;
         // description of spell (translated)
         std::string description() const;
+        // spell message when cast (translated)
+        std::string message() const;
         // energy source as a string (translated)
         std::string energy_string() const;
         // energy cost returned as a string
@@ -303,6 +359,11 @@ class spell
         std::string energy_cur_string( const player &p ) const;
         // prints out a list of valid targets separated by commas
         std::string enumerate_targets() const;
+
+        std::string damage_string() const;
+        std::string aoe_string() const;
+        std::string duration_string() const;
+
         // energy source enum
         energy_type energy_source() const;
         // the color that's representative of the damage type
@@ -322,13 +383,17 @@ class spell
         int heal( const tripoint &target ) const;
 
         // casts the spell effect. returns true if successful
-        bool cast_spell_effect( const Creature &source, const tripoint &target ) const;
+        void cast_spell_effect( Creature &source, const tripoint &target ) const;
         // goes through the spell effect and all of its internal spells
-        bool cast_all_effects( const Creature &source, const tripoint &target ) const;
+        void cast_all_effects( Creature &source, const tripoint &target ) const;
 
         // is the target valid for this spell?
         bool is_valid_target( const Creature &caster, const tripoint &p ) const;
         bool is_valid_target( valid_target t ) const;
+        bool is_valid_effect_target( valid_target t ) const;
+
+        // picks a random valid tripoint from @area
+        tripoint random_valid_target( const Creature &caster, const tripoint &caster_pos ) const;
 };
 
 class known_magic
@@ -395,32 +460,45 @@ class known_magic
 
 namespace spell_effect
 {
-void teleport( int min_distance, int max_distance );
-void pain_split(); // only does g->u
-void move_earth( const tripoint &target );
-void target_attack( const spell &sp, const Creature &caster,
-                    const tripoint &target );
-void projectile_attack( const spell &sp, const Creature &caster,
+
+void teleport_random( const spell &sp, Creature &caster, const tripoint & );
+void pain_split( const spell &, Creature &, const tripoint & );
+void target_attack( const spell &sp, Creature &caster,
+                    const tripoint &epicenter );
+void projectile_attack( const spell &sp, Creature &caster,
                         const tripoint &target );
-void cone_attack( const spell &sp, const Creature &caster,
+void cone_attack( const spell &sp, Creature &caster,
                   const tripoint &target );
-void line_attack( const spell &sp, const Creature &caster,
+void line_attack( const spell &sp, Creature &caster,
                   const tripoint &target );
+
+void area_pull( const spell &sp, Creature &caster, const tripoint &center );
+void area_push( const spell &sp, Creature &caster, const tripoint &center );
 
 std::set<tripoint> spell_effect_blast( const spell &, const tripoint &, const tripoint &target,
-                                       const int aoe_radius, const bool ignore_walls );
+                                       int aoe_radius, bool ignore_walls );
 std::set<tripoint> spell_effect_cone( const spell &sp, const tripoint &source,
                                       const tripoint &target,
-                                      const int aoe_radius, const bool ignore_walls );
+                                      int aoe_radius, bool ignore_walls );
 std::set<tripoint> spell_effect_line( const spell &, const tripoint &source,
                                       const tripoint &target,
-                                      const int aoe_radius, const bool ignore_walls );
+                                      int aoe_radius, bool ignore_walls );
 
-void spawn_ethereal_item( const spell &sp );
-void recover_energy( const spell &sp, const tripoint &target );
-void spawn_summoned_monster( const spell &sp, const Creature &caster, const tripoint &target );
-void translocate( const spell &sp, const Creature &caster, const tripoint &target,
-                  teleporter_list &tp_list );
+void spawn_ethereal_item( const spell &sp, Creature &, const tripoint & );
+void recover_energy( const spell &sp, Creature &, const tripoint &target );
+void spawn_summoned_monster( const spell &sp, Creature &caster, const tripoint &target );
+void translocate( const spell &sp, Creature &caster, const tripoint &target );
+// adds a timed event to the caster only
+void timed_event( const spell &sp, Creature &caster, const tripoint & );
+void transform_blast( const spell &sp, Creature &caster, const tripoint &target );
+void vomit( const spell &sp, Creature &caster, const tripoint &target );
+void explosion( const spell &sp, Creature &, const tripoint &target );
+void flashbang( const spell &sp, Creature &caster, const tripoint &target );
+void mod_moves( const spell &sp, Creature &caster, const tripoint &target );
+void map( const spell &sp, Creature &caster, const tripoint & );
+void morale( const spell &sp, Creature &caster, const tripoint &target );
+void mutate( const spell &sp, Creature &caster, const tripoint &target );
+void none( const spell &sp, Creature &, const tripoint &target );
 } // namespace spell_effect
 
 class spellbook_callback : public uilist_callback
@@ -430,6 +508,58 @@ class spellbook_callback : public uilist_callback
     public:
         void add_spell( const spell_id &sp );
         void select( int entnum, uilist *menu ) override;
+};
+
+// Utility structure to run area queries over weight map. It uses shortest-path-expanding-tree,
+// similar to the ones used in pathfinding. Some spell effects, like area_pull use the final
+// tree to determine where to move affected objects.
+struct area_expander {
+    // A single node for a tree.
+    struct node {
+        // Expanded position
+        tripoint position;
+        // Previous position
+        tripoint from;
+        // Accumulated cost.
+        float cost = 0;
+    };
+
+    int max_range = -1;
+    int max_expand = -1;
+
+    // The area we have visited already.
+    std::vector<node> area;
+
+    // Maps coordinate to expanded node.
+    std::map<tripoint, int> area_search;
+
+    struct area_node_comparator {
+        area_node_comparator( std::vector<area_expander::node> &area ) : area( area ) {
+        }
+
+        bool operator()( int a, int b ) const {
+            return area[a].cost < area[b].cost;
+        }
+
+        std::vector<area_expander::node> &area;
+    };
+
+    std::priority_queue<int, std::vector<int>, area_node_comparator> frontier;
+
+    area_expander();
+    // Check whether we have already visited this node.
+    int contains( const tripoint &pt ) const;
+
+    // Adds node to a search tree. Returns true if new node is allocated.
+    bool enqueue( const tripoint &from, const tripoint &to, float cost );
+
+    // Run wave propagation
+    int run( const tripoint &center );
+
+    // Sort nodes by its cost.
+    void sort_ascending();
+
+    void sort_descending();
 };
 
 #endif

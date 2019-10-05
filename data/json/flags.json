@@ -6,6 +6,10 @@
     "info": "This gear has <info>cloaking tech</info> that will <good>make you invisible</good> when active, at the cost of <info>power from a UPS</info>."
   },
   {
+    "id": "EFFECT_INVISIBLE",
+    "type": "json_flag"
+  },
+  {
     "id": "ALARMCLOCK",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
@@ -22,6 +26,14 @@
     "type": "json_flag",
     "context": [ "TOOL" ],
     "info": "This item can be activated or reloaded from adjacent tile without picking it up."
+  },
+  {
+    "id": "AURA",
+    "type": "json_flag",
+    "context": [ "ARMOR", "TOOL_ARMOR" ],
+    "description": "This item goes in the outer aura layer, intended for metaphysical effects.",
+    "info": "This is in your <info>outer aura</info>.",
+    "conflicts": [ "OUTER", "SKINTIGHT", "WAIST", "PERSONAL", "BELTED" ]
   },
   {
     "id": "BAROMETER",
@@ -41,7 +53,7 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "description": "Layer for backpacks and things worn over outerwear.",
     "info": "This gear is <info>strapped</info> onto you.",
-    "conflicts": [ "OUTER", "SKINTIGHT", "WAIST" ]
+    "conflicts": [ "OUTER", "SKINTIGHT", "WAIST", "PERSONAL", "AURA" ]
   },
   {
     "id": "BIONIC_NPC_USABLE",
@@ -55,6 +67,10 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "description": "Blinds the wearer while worn, and provides nominal protection vs flashbang flashes.",
     "info": "This gear <bad>prevents</bad> you from <info>seeing</info> anything."
+  },
+  {
+    "id": "EFFECT_NIGHT_VISION",
+    "type": "json_flag"
   },
   {
     "id": "BLOCK_WHILE_WORN",
@@ -178,8 +194,8 @@
     "id": "FILTHY",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
-    "description": "Zombie-dropped clothing giving various penalties if Filthy mod is active.",
-    "info": "This piece of clothing is <bad>filthy</bad>."
+    "description": "Zombie-dropped clothing giving various penalties if Filthy mod is active.  Also CBMs harvested from zombies.",
+    "info": "This item is <bad>filthy</bad>."
   },
   {
     "id": "FLASH_PROTECTION",
@@ -275,7 +291,7 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "description": "Outer garment layer.",
     "info": "This gear is generally <info>worn over</info> clothing.",
-    "conflicts": [ "BELTED", "SKINTIGHT", "WAIST" ]
+    "conflicts": [ "BELTED", "SKINTIGHT", "WAIST", "PERSONAL", "AURA" ]
   },
   {
     "id": "OVERSIZE",
@@ -296,6 +312,14 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "info": "This gear <good>reduces</good> the volume of <info>sounds</info> to a safe level.",
     "conflicts": [ "DEAF" ]
+  },
+  {
+    "id": "PERSONAL",
+    "type": "json_flag",
+    "context": [ "ARMOR", "TOOL_ARMOR" ],
+    "description": "This item goes in the personal aura layer, intended for metaphysical effects.",
+    "info": "This is in your <info>personal aura</info>.",
+    "conflicts": [ "BELTED", "OUTER", "WAIST", "SKINTIGHT", "AURA" ]
   },
   {
     "id": "POCKETS",
@@ -357,6 +381,13 @@
     "description": "Prevents the player from wielding a weapon two-handed, forcing one-handed use if the weapon permits it."
   },
   {
+    "id": "SEMITANGIBLE",
+    "type": "json_flag",
+    "context": [ "ARMOR", "TOOL_ARMOR" ],
+    "description": "Prevents the item from participating in the encumbrance system when worn.",
+    "info": "It seems <info>partially intangible</info>, and can occupy the same space as other things when worn."
+  },
+  {
     "id": "SHEATH_KNIFE",
     "type": "json_flag",
     "context": [ "GENERIC", "TOOL" ],
@@ -386,7 +417,7 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "description": "Undergarment layer.",
     "info": "This clothing <info>lies close</info> to the skin.",
-    "conflicts": [ "BELTED", "OUTER", "WAIST" ]
+    "conflicts": [ "BELTED", "OUTER", "WAIST", "PERSONAL", "AURA" ]
   },
   {
     "id": "SLOWS_MOVEMENT",
@@ -448,7 +479,7 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "description": "Layer for belts and other things worn on the waist.",
     "info": "This gear is worn on or around your <info>waist</info>.",
-    "conflicts": [ "BELTED", "OUTER", "SKINTIGHT" ]
+    "conflicts": [ "BELTED", "OUTER", "SKINTIGHT", "PERSONAL", "AURA" ]
   },
   {
     "id": "WATCH",
@@ -619,5 +650,53 @@
     "type": "json_flag",
     "context": [ "SPELL" ],
     "description": "This spell requires focus to cast.  The lower your focus, the higher failure rate to cast."
+  },
+  {
+    "id": "WONDER",
+    "type": "json_flag",
+    "context": [ "SPELL" ],
+    "description": "Chooses a spell at random to cast from extra_effects.  See MAGIC.md for details"
+  },
+  {
+    "id": "NON_THRESH",
+    "type": "json_flag",
+    "context": [ "mutation" ],
+    "description": "This mutation does not count toward thresholds at all."
+  },
+  {
+    "id": "EFFECT_FEATHER_FALL",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_BIO_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_BASH_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_CUT_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_ACID_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_STAB_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_HEAT_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "EFFECT_COLD_IMMUNE",
+    "type": "json_flag"
+  },
+  {
+    "id": "ELECTRIC_IMMUNE",
+    "type": "json_flag"
   }
 ]
