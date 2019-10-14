@@ -17,6 +17,7 @@
 #include "string_id.h"
 #include "translations.h"
 #include "event_bus.h"
+#include "sounds.h"
 
 struct tripoint;
 class Creature;
@@ -127,6 +128,12 @@ class spell_type
         translation description;
         // spell message when cast
         translation message;
+        // spell sound effect
+        translation sound_description;
+        sounds::sound_t sound_type;
+        bool sound_ambient;
+        std::string sound_id;
+        std::string sound_variant;
         // spell effect string. used to look up spell function
         std::string effect_name;
         std::function<void( const spell &, Creature &, const tripoint & )> effect;
@@ -379,6 +386,7 @@ class spell
 
         // makes a spell sound at the location
         void make_sound( const tripoint &target ) const;
+        void make_sound( const tripoint &target, int loudness ) const;
         // heals the critter at the location, returns amount healed (player heals each body part)
         int heal( const tripoint &target ) const;
 
@@ -491,13 +499,16 @@ void translocate( const spell &sp, Creature &caster, const tripoint &target );
 // adds a timed event to the caster only
 void timed_event( const spell &sp, Creature &caster, const tripoint & );
 void transform_blast( const spell &sp, Creature &caster, const tripoint &target );
+void noise( const spell &sp, Creature &, const tripoint &target );
 void vomit( const spell &sp, Creature &caster, const tripoint &target );
 void explosion( const spell &sp, Creature &, const tripoint &target );
 void flashbang( const spell &sp, Creature &caster, const tripoint &target );
 void mod_moves( const spell &sp, Creature &caster, const tripoint &target );
 void map( const spell &sp, Creature &caster, const tripoint & );
 void morale( const spell &sp, Creature &caster, const tripoint &target );
+void charm_monster( const spell &sp, Creature &caster, const tripoint &target );
 void mutate( const spell &sp, Creature &caster, const tripoint &target );
+void bash( const spell &sp, Creature &caster, const tripoint &target );
 void none( const spell &sp, Creature &, const tripoint &target );
 } // namespace spell_effect
 
