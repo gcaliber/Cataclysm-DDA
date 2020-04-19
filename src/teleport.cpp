@@ -1,15 +1,27 @@
 #include "teleport.h"
 
-#include "character.h"
+#include <cmath>
+#include <memory>
+
 #include "avatar.h"
+#include "bodypart.h"
+#include "calendar.h"
 #include "creature.h"
-#include "player.h"
+#include "debug.h"
+#include "enums.h"
+#include "event.h"
+#include "event_bus.h"
 #include "game.h"
 #include "map.h"
 #include "messages.h"
+#include "player.h"
 #include "point.h"
+#include "rng.h"
+#include "translations.h"
+#include "type_id.h"
 
-const efftype_id effect_teleglow( "teleglow" );
+static const efftype_id effect_grabbed( "grabbed" );
+static const efftype_id effect_teleglow( "teleglow" );
 
 bool teleport::teleport( Creature &critter, int min_distance, int max_distance, bool safe,
                          bool add_teleglow )
@@ -22,7 +34,7 @@ bool teleport::teleport( Creature &critter, int min_distance, int max_distance, 
     const bool c_is_u = p != nullptr && p == &g->u;
     int tries = 0;
     tripoint origin = critter.pos();
-    tripoint new_pos;
+    tripoint new_pos = origin;
     //The teleportee is dimensionally anchored so nothing happens
     if( p && ( p->worn_with_flag( "DIMENSIONAL_ANCHOR" ) ||
                p->has_effect_with_flag( "DIMENSIONAL_ANCHOR" ) ) ) {
@@ -44,7 +56,7 @@ bool teleport::teleport( Creature &critter, int min_distance, int max_distance, 
             }
             return false;
         }
-        critter.apply_damage( nullptr, bp_torso, 9999 );
+        critter.apply_damage( nullptr, bodypart_id( "torso" ), 9999 );
         if( c_is_u ) {
             g->events().send<event_type::teleports_into_wall>( p->getID(), g->m.obstacle_name( new_pos ) );
             add_msg( m_bad, _( "You die after teleporting into a solid." ) );
@@ -67,7 +79,7 @@ bool teleport::teleport( Creature &critter, int min_distance, int max_distance, 
         } else {
             const bool poor_soul_is_u = ( poor_soul == &g->u );
             if( poor_soul_is_u ) {
-                add_msg( m_bad, _( "..." ) );
+                add_msg( m_bad, _( "…" ) );
                 add_msg( m_bad, _( "You explode into thousands of fragments." ) );
             }
             if( p ) {
@@ -82,7 +94,8 @@ bool teleport::teleport( Creature &critter, int min_distance, int max_distance, 
                              critter.disp_name(), poor_soul->disp_name() );
                 }
             }
-            poor_soul->apply_damage( nullptr, bp_torso, 9999 ); //Splatter real nice.
+            //Splatter real nice.
+            poor_soul->apply_damage( nullptr, bodypart_id( "torso" ), 9999 );
             poor_soul->check_dead_state();
         }
     }
@@ -97,5 +110,6 @@ bool teleport::teleport( Creature &critter, int min_distance, int max_distance, 
     if( c_is_u ) {
         g->update_map( *p );
     }
+    critter.remove_effect( effect_grabbed );
     return true;
 }

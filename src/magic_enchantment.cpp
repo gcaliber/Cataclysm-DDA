@@ -1,13 +1,24 @@
 #include "magic_enchantment.h"
 
+#include <cstdlib>
+#include <memory>
+#include <set>
+
 #include "character.h"
+#include "creature.h"
+#include "debug.h"
 #include "enum_conversions.h"
+#include "enums.h"
 #include "game.h"
 #include "generic_factory.h"
-#include "item.h"
 #include "json.h"
 #include "map.h"
+#include "point.h"
+#include "rng.h"
+#include "string_id.h"
 #include "units.h"
+
+template <typename E> struct enum_traits;
 
 template<>
 struct enum_traits<enchantment::has> {
@@ -145,7 +156,7 @@ bool string_id<enchantment>::is_valid() const
     return spell_factory.is_valid( *this );
 }
 
-void enchantment::load_enchantment( JsonObject &jo, const std::string &src )
+void enchantment::load_enchantment( const JsonObject &jo, const std::string &src )
 {
     spell_factory.load( jo, src );
 }
@@ -162,10 +173,16 @@ bool enchantment::is_active( const Character &guy, const item &parent ) const
     }
 
     if( !( active_conditions.first == has::HELD ||
-           ( active_conditions.first == has::WIELD && &guy.weapon == &parent ) ||
+           ( active_conditions.first == has::WIELD && guy.is_wielding( parent ) ) ||
            ( active_conditions.first == has::WORN && guy.is_worn( parent ) ) ) ) {
         return false;
     }
+
+    return is_active( guy );
+}
+
+bool enchantment::is_active( const Character &guy ) const
+{
 
     if( active_conditions.second == condition::ALWAYS ) {
         return true;
@@ -191,25 +208,22 @@ void enchantment::add_activation( const time_duration &dur, const fake_spell &fa
     intermittent_activation[dur].emplace_back( fake );
 }
 
-void enchantment::load( JsonObject &jo, const std::string & )
+void enchantment::load( const JsonObject &jo, const std::string & )
 {
     optional( jo, was_loaded, "id", id, enchantment_id( "" ) );
 
     jo.read( "hit_you_effect", hit_you_effect );
     jo.read( "hit_me_effect", hit_me_effect );
+    jo.read( "emitter", emitter );
 
     if( jo.has_object( "intermittent_activation" ) ) {
         JsonObject jobj = jo.get_object( "intermittent_activation" );
-        JsonArray jarray = jo.get_array( "effects" );
-        while( jarray.has_more() ) {
-            JsonObject effect_obj;
+        for( const JsonObject effect_obj : jobj.get_array( "effects" ) ) {
             time_duration dur = read_from_json_string<time_duration>( *effect_obj.get_raw( "frequency" ),
                                 time_duration::units );
             if( effect_obj.has_array( "spell_effects" ) ) {
-                JsonArray jarray = effect_obj.get_array( "spell_effects" );
-                while( jarray.has_more() ) {
+                for( const JsonObject fake_spell_obj : effect_obj.get_array( "spell_effects" ) ) {
                     fake_spell fake;
-                    JsonObject fake_spell_obj = jarray.next_object();
                     fake.load( fake_spell_obj );
                     add_activation( dur, fake );
                 }
@@ -226,10 +240,12 @@ void enchantment::load( JsonObject &jo, const std::string & )
     active_conditions.second = io::string_to_enum<condition>( jo.get_string( "condition",
                                "ALWAYS" ) );
 
+    for( JsonObject jsobj : jo.get_array( "ench_effects" ) ) {
+        ench_effects.emplace( efftype_id( jsobj.get_string( "effect" ) ), jsobj.get_int( "intensity" ) );
+    }
+
     if( jo.has_array( "values" ) ) {
-        JsonArray jarray = jo.get_array( "values" );
-        while( jarray.has_more() ) {
-            JsonObject value_obj = jarray.next_object();
+        for( const JsonObject value_obj : jo.get_array( "values" ) ) {
             const enchantment::mod value = io::string_to_enum<mod>( value_obj.get_string( "value" ) );
             const int add = value_obj.get_int( "add", 0 );
             const double mult = value_obj.get_float( "multiply", 0.0 );
@@ -247,25 +263,25 @@ void enchantment::serialize( JsonOut &jsout ) const
 {
     jsout.start_object();
 
+    if( !id.is_empty() ) {
+        jsout.member( "id", id );
+        jsout.end_object();
+        // if the enchantment has an id then it is defined elsewhere and does not need to be serialized.
+        return;
+    }
+
     jsout.member( "has", io::enum_to_string<has>( active_conditions.first ) );
     jsout.member( "condition", io::enum_to_string<condition>( active_conditions.second ) );
+    if( emitter ) {
+        jsout.member( "emitter", emitter );
+    }
 
     if( !hit_you_effect.empty() ) {
-        jsout.member( "hit_you_effect" );
-        jsout.start_array();
-        for( const fake_spell &sp : hit_you_effect ) {
-            sp.serialize( jsout );
-        }
-        jsout.end_array();
+        jsout.member( "hit_you_effect", hit_you_effect );
     }
 
     if( !hit_me_effect.empty() ) {
-        jsout.member( "hit_me_effect" );
-        jsout.start_array();
-        for( const fake_spell &sp : hit_me_effect ) {
-            sp.serialize( jsout );
-        }
-        jsout.end_array();
+        jsout.member( "hit_me_effect", hit_me_effect );
     }
 
     if( !intermittent_activation.empty() ) {
@@ -320,10 +336,10 @@ bool enchantment::add( const enchantment &rhs )
 
 void enchantment::force_add( const enchantment &rhs )
 {
-    for( const std::pair<mod, int> &pair_values : rhs.values_add ) {
+    for( const std::pair<const mod, int> &pair_values : rhs.values_add ) {
         values_add[pair_values.first] += pair_values.second;
     }
-    for( const std::pair<mod, double> &pair_values : rhs.values_multiply ) {
+    for( const std::pair<const mod, double> &pair_values : rhs.values_multiply ) {
         // values do not multiply against each other, they add.
         // so +10% and -10% will add to 0%
         values_multiply[pair_values.first] += pair_values.second;
@@ -333,7 +349,13 @@ void enchantment::force_add( const enchantment &rhs )
 
     hit_you_effect.insert( hit_you_effect.end(), rhs.hit_you_effect.begin(), rhs.hit_you_effect.end() );
 
-    for( const std::pair<time_duration, std::vector<fake_spell>> &act_pair :
+    ench_effects.insert( rhs.ench_effects.begin(), rhs.ench_effects.end() );
+
+    if( rhs.emitter ) {
+        emitter = rhs.emitter;
+    }
+
+    for( const std::pair<const time_duration, std::vector<fake_spell>> &act_pair :
          rhs.intermittent_activation ) {
         for( const fake_spell &fake : act_pair.second ) {
             intermittent_activation[act_pair.first].emplace_back( fake );
@@ -380,18 +402,68 @@ void enchantment::activate_passive( Character &guy ) const
 
     guy.mod_speed_bonus( get_value_add( mod::SPEED ) );
     guy.mod_speed_bonus( mult_bonus( mod::SPEED, guy.get_speed_base() ) );
-}
 
-void enchantment::cast_hit_you( Character &caster, const tripoint &target ) const
-{
-    for( const fake_spell &sp : hit_you_effect ) {
-        sp.get_spell( sp.level ).cast_all_effects( caster, target );
+    guy.mod_num_dodges_bonus( get_value_add( mod::BONUS_DODGE ) );
+    guy.mod_num_dodges_bonus( mult_bonus( mod::BONUS_DODGE, guy.get_num_dodges_base() ) );
+
+    if( emitter ) {
+        g->m.emit_field( guy.pos(), *emitter );
+    }
+    for( const std::pair<efftype_id, int> eff : ench_effects ) {
+        guy.add_effect( eff.first, 1_seconds, num_bp, false, eff.second );
+    }
+    for( const std::pair<const time_duration, std::vector<fake_spell>> &activation :
+         intermittent_activation ) {
+        // a random approximation!
+        if( one_in( to_seconds<int>( activation.first ) ) ) {
+            for( const fake_spell &fake : activation.second ) {
+                fake.get_spell( 0 ).cast_all_effects( guy, guy.pos() );
+            }
+        }
     }
 }
 
-void enchantment::cast_hit_me( Character &caster ) const
+void enchantment::cast_hit_you( Character &caster, const Creature &target ) const
+{
+    for( const fake_spell &sp : hit_you_effect ) {
+        cast_enchantment_spell( caster, &target, sp );
+    }
+}
+
+void enchantment::cast_hit_me( Character &caster, const Creature *target ) const
 {
     for( const fake_spell &sp : hit_me_effect ) {
+        cast_enchantment_spell( caster, target, sp );
+    }
+}
+
+void enchantment::cast_enchantment_spell( Character &caster, const Creature *target,
+        const fake_spell &sp ) const
+{
+    // check the chances
+    if( !one_in( sp.trigger_once_in ) ) {
+        return;
+    }
+
+    if( sp.self ) {
+        caster.add_msg_player_or_npc( m_good,
+                                      sp.trigger_message,
+                                      sp.npc_trigger_message,
+                                      caster.name );
         sp.get_spell( sp.level ).cast_all_effects( caster, caster.pos() );
+    } else  if( target != nullptr ) {
+        const Creature &trg_crtr = *target;
+        const spell &spell_lvl = sp.get_spell( sp.level );
+        if( !spell_lvl.is_valid_target( caster, trg_crtr.pos() ) ||
+            !spell_lvl.is_target_in_range( caster, trg_crtr.pos() ) ) {
+            return;
+        }
+
+        caster.add_msg_player_or_npc( m_good,
+                                      sp.trigger_message,
+                                      sp.npc_trigger_message,
+                                      caster.name, trg_crtr.disp_name() );
+
+        spell_lvl.cast_all_effects( caster, trg_crtr.pos() );
     }
 }

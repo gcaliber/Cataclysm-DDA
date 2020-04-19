@@ -1,14 +1,21 @@
 #pragma once
-#ifndef CATA_EVENT_H
-#define CATA_EVENT_H
+#ifndef CATA_SRC_EVENT_H
+#define CATA_SRC_EVENT_H
 
+#include <array>
+#include <cstddef>
+#include <cstdlib>
+#include <functional>
 #include <map>
+#include <string>
+#include <type_traits>
 #include <utility>
 
 #include "calendar.h"
 #include "cata_variant.h"
-#include "enum_conversions.h"
-#include "type_id.h"
+#include "debug.h"
+
+template <typename E> struct enum_traits;
 
 using itype_id = std::string;
 
@@ -64,7 +71,6 @@ enum class event_type {
     game_start,
     installs_cbm,
     installs_faulty_cbm,
-    launches_nuke,
     learns_martial_art,
     loses_addiction,
     npc_becomes_hostile,
@@ -111,8 +117,6 @@ struct hash<event_type> {
 namespace cata
 {
 
-class event;
-
 namespace event_detail
 {
 
@@ -134,7 +138,7 @@ struct event_spec_character {
     };
 };
 
-static_assert( static_cast<int>( event_type::num_event_types ) == 62,
+static_assert( static_cast<int>( event_type::num_event_types ) == 61,
                "This static_assert is to remind you to add a specialization for your new "
                "event_type below" );
 
@@ -434,14 +438,6 @@ struct event_spec<event_type::installs_faulty_cbm> {
 };
 
 template<>
-struct event_spec<event_type::launches_nuke> {
-    static constexpr std::array<std::pair<const char *, cata_variant_type>, 1> fields = {{
-            { "target_terrain", cata_variant_type::oter_id },
-        }
-    };
-};
-
-template<>
 struct event_spec<event_type::learns_martial_art> {
     static constexpr std::array<std::pair<const char *, cata_variant_type>, 2> fields = {{
             { "character", cata_variant_type::character_id },
@@ -624,4 +620,4 @@ struct make_event_helper<Type, std::index_sequence<I...>> {
 
 } // namespace cata
 
-#endif // CATA_EVENT_H
+#endif // CATA_SRC_EVENT_H

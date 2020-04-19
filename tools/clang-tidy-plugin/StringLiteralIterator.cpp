@@ -1,13 +1,21 @@
 #include "StringLiteralIterator.h"
 
+#include <algorithm>
+#include <clang/AST/Expr.h>
+#include <cstddef>
+#include <cstdint>
+
 namespace clang
 {
+class LangOptions;
+class SourceManager;
+
 namespace tidy
 {
 namespace cata
 {
 
-StringLiteralIterator::StringLiteralIterator( const StringLiteral &str, size_t ind )
+StringLiteralIterator::StringLiteralIterator( const StringLiteral &str, const size_t ind )
     : str( str ), ind( ind )
 {
 }

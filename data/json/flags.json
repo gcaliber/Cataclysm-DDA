@@ -7,6 +7,7 @@
   },
   {
     "id": "EFFECT_INVISIBLE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
@@ -70,6 +71,7 @@
   },
   {
     "id": "EFFECT_NIGHT_VISION",
+    "context": [  ],
     "type": "json_flag"
   },
   {
@@ -88,13 +90,13 @@
     "id": "CLIMATE_CONTROL",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
-    "info": "This piece of clothing has <info>built-in or attached climate control</info>, keeping you at a <good>comfortable temperature</good>."
+    "info": "This clothing has <info>built-in or attached climate control</info>, keeping you at a <good>comfortable temperature</good>."
   },
   {
     "id": "COLLAR",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
-    "info": "This piece of clothing has a <info>wide collar</info> that can keep your mouth warm if it is unencumbered."
+    "info": "This clothing has a <info>wide collar</info> that can keep your mouth warm if it is unencumbered."
   },
   {
     "id": "DEAF",
@@ -144,6 +146,7 @@
   {
     "id": "ETHEREAL_ITEM",
     "type": "json_flag",
+    "context": [  ],
     "info": "This item disappears as soon as its timer runs out whether it is food or not."
   },
   {
@@ -157,7 +160,7 @@
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "//": "Wearing this clothing gives a morale bonus if the player has the Stylish trait.",
-    "info": "This piece of clothing is <info>fancy</info>.",
+    "info": "This clothing is <info>fancy</info>.",
     "conflicts": [ "SUPER_FANCY" ]
   },
   {
@@ -195,6 +198,7 @@
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "//": "Zombie-dropped clothing giving various penalties if Filthy mod is active.  Also CBMs harvested from zombies.",
+    "craft_inherit": true,
     "info": "This item is <bad>filthy</bad>."
   },
   {
@@ -233,7 +237,7 @@
     "id": "HOOD",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
-    "info": "This piece of clothing has a <info>hood</info> to keep your head warm if your head is unencumbered."
+    "info": "This clothing has a <info>hood</info> to keep your head warm if your head is unencumbered."
   },
   {
     "id": "HYGROMETER",
@@ -304,7 +308,7 @@
     "id": "UNDERSIZE",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
-    "//": "Can be worn comfortably by mutants with Tiny or Unassuming.  Too small for anyone else."
+    "//": "This clothing can be worn comfortably by mutants with Tiny or Unassuming.  Too small for anyone else."
   },
   {
     "id": "PARTIAL_DEAF",
@@ -372,7 +376,7 @@
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "//": "Prevents the covered body-part(s) from getting wet in the rain.",
-    "info": "This piece of clothing is designed to keep you <info>dry</info> in the rain."
+    "info": "This clothing is designed to keep you <info>dry</info> in the rain."
   },
   {
     "id": "RESTRICT_HANDS",
@@ -386,6 +390,12 @@
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "//": "Prevents the item from participating in the encumbrance system when worn.",
     "info": "It seems <info>partially intangible</info>, and can occupy the same space as other things when worn."
+  },
+  {
+    "id": "SHEATH_AXE",
+    "type": "json_flag",
+    "context": [ "GENERIC", "TOOL" ],
+    "//": "This item can be stored in a sheath of the appropriate size."
   },
   {
     "id": "SHEATH_KNIFE",
@@ -502,6 +512,13 @@
     "info": "This clothing <good>performs well</good> even when <info>soaking wet</info>. This can feel good."
   },
   {
+    "id": "POWERARMOR_COMPATIBLE",
+    "type": "json_flag",
+    "context": [ "ARMOR", "TOOL_ARMOR" ],
+    "//": "Allows power armor to be worn with compatible armors like ear plugs and mouthpieces.",
+    "info": "This item can be worn simultaneously with power armor."
+  },
+  {
     "id": "furred",
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
@@ -518,6 +535,12 @@
     "type": "json_flag",
     "context": [ "ARMOR", "TOOL_ARMOR" ],
     "info": "This gear has certain parts padded with leather to <good>increase protection</good> with moderate <bad>increase to encumbrance</bad>."
+  },
+  {
+    "id": "steel_padded",
+    "type": "json_flag",
+    "context": [ "ARMOR", "TOOL_ARMOR" ],
+    "info": "This gear has certain parts padded with steel to <good>increase protection</good> with moderate <bad>increase to encumbrance</bad>."
   },
   {
     "id": "wooled",
@@ -620,7 +643,7 @@
     "id": "VERBAL",
     "type": "json_flag",
     "context": [ "SPELL" ],
-    "//": "The caster must speak in order to cast the spell.  More mouth encumbrannce increases failure percent, and the caster speaks when casting."
+    "//": "The caster must speak in order to cast the spell.  More mouth encumbrance increases failure percent, and the caster speaks when casting."
   },
   {
     "id": "SOMATIC",
@@ -653,6 +676,12 @@
     "//": "Chooses a spell at random to cast from extra_effects.  See MAGIC.md for details"
   },
   {
+    "id": "PAIN_NORESIST",
+    "type": "json_flag",
+    "context": [ "SPELL" ],
+    "//": "pain altering spells can't be resisted (like with the deadened trait)"
+  },
+  {
     "id": "NON_THRESH",
     "type": "json_flag",
     "context": [ "mutation" ],
@@ -660,38 +689,83 @@
   },
   {
     "id": "EFFECT_FEATHER_FALL",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_BIO_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_BASH_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_CUT_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_ACID_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_STAB_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_HEAT_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "EFFECT_COLD_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
   },
   {
     "id": "ELECTRIC_IMMUNE",
+    "context": [  ],
     "type": "json_flag"
+  },
+  {
+    "id": "HIDDEN_HALLU",
+    "type": "json_flag",
+    "context": [ "COMESTIBLE" ],
+    "craft_inherit": true,
+    "//": "Contains hallucinogenic compounds from foraged foods."
+  },
+  {
+    "id": "HIDDEN_POISON",
+    "type": "json_flag",
+    "context": [ "COMESTIBLE" ],
+    "craft_inherit": true,
+    "//": "Contains poisonous compounds from foraged foods."
+  },
+  {
+    "id": "BAD_TASTE",
+    "type": "json_flag",
+    "context": [ "COMESTIBLE" ],
+    "craft_inherit": true,
+    "taste_mod": -5,
+    "//": "Has a bad taste or texture that can't be covered up through cooking.",
+    "info": "This food is <bad>unappetizing</bad> in a way that <bad>can't be covered up by most cooking</bad>."
+  },
+  {
+    "id": "RAW",
+    "type": "json_flag",
+    "context": [ "COMESTIBLE" ],
+    "//": "Decreases calories as they appear in JSON def by 25%. This penalty is removed if the item is used in a recipe that requires heating.",
+    "info": "This food is <info>raw</info>, and will be <good>more nutritious</good> if cooked."
+  },
+  {
+    "id": "CANNIBALISM",
+    "type": "json_flag",
+    "context": [ "COMESTIBLE" ],
+    "craft_inherit": true
   }
 ]

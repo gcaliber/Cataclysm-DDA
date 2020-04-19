@@ -62,9 +62,12 @@ ignore_files = {os.path.normpath(i) for i in {
 
 # these objects have no translatable strings
 ignorable = {
+    "ammo_effect",
     "behavior",
+    "charge_removal_blacklist",
     "city_building",
     "colordef",
+    "disease_type",
     "emit",
     "enchantment",
     "event_transformation",
@@ -92,8 +95,10 @@ ignorable = {
     "region_settings",
     "requirement",
     "rotatable_symbol",
+    "SCENARIO_BLACKLIST",
+    "scent_type",
     "skill_boost",
-    "SPECIES",
+    "TRAIT_BLACKLIST",
     "trait_group",
     "uncraft",
     "vehicle_group",
@@ -110,6 +115,7 @@ ignorable = {
 #   "sound" member
 #   "messages" member containing an array of translatable strings
 automatically_convertible = {
+    "achievement",
     "activity_type",
     "AMMO",
     "ammunition_type",
@@ -123,15 +129,15 @@ automatically_convertible = {
     "CONTAINER",
     "dream",
     "ENGINE",
-    "epilogue",
+    "event_statistic",
     "faction",
-    "fault",
     "furniture",
     "GENERIC",
     "item_action",
     "ITEM_CATEGORY",
     "json_flag",
     "keybinding",
+    "LOOT_ZONE",
     "MAGAZINE",
     "map_extra",
     "MOD_INFO",
@@ -144,7 +150,7 @@ automatically_convertible = {
     "PET_ARMOR",
     "score",
     "skill",
-    "snippet",
+    "SPECIES",
     "speech",
     "SPELL",
     "start_location",
@@ -153,7 +159,6 @@ automatically_convertible = {
     "TOOLMOD",
     "TOOL_ARMOR",
     "tool_quality",
-    "tutorial_messages",
     "vehicle",
     "vehicle_part",
     "vitamin",
@@ -167,13 +172,17 @@ needs_plural = {
     "BIONIC_ITEM",
     "BOOK",
     "CONTAINER",
+    "ENGINE",
     "GENERIC",
     "GUN",
     "GUNMOD",
+    "MAGAZINE",
     "MONSTER",
+    "PET_ARMOR",
     "TOOL",
     "TOOLMOD",
     "TOOL_ARMOR",
+    "WHEEL",
 }
 
 # these objects can be automatically converted, but use format strings
@@ -198,14 +207,16 @@ def extract_harvest(item):
 
 def extract_bodypart(item):
     outfile = get_outfile("bodypart")
+    # See comments in `body_part_struct::load` of bodypart.cpp about why xxx and xxx_multiple are not inside a single translation object.
     writestr(outfile, item["name"])
-    writestr(outfile, item["name"], context="bodypart_accusative")
-    if "name_plural" in item:
-        writestr(outfile, item["name_plural"])
-        writestr(outfile, item["name_plural"], context="bodypart_accusative")
+    if "name_multiple" in item:
+        writestr(outfile, item["name_multiple"])
+    writestr(outfile, item["accusative"])
+    if "accusative_multiple" in item:
+        writestr(outfile, item["accusative_multiple"])
     writestr(outfile, item["encumbrance_text"])
-    writestr(outfile, item["heading_singular"])
-    writestr(outfile, item["heading_plural"])
+    writestr(outfile, item["heading"])
+    writestr(outfile, item["heading_multiple"])
     if "hp_bar_ui_text" in item:
         writestr(outfile, item["hp_bar_ui_text"])
 
@@ -240,6 +251,9 @@ def extract_martial_art(item):
     if "description" in item:
         writestr(outfile, item["description"],
                  comment="Description for martial art '{}'".format(name))
+    if "initiate" in item:
+        writestr(outfile, item["initiate"], format_strings=True,
+                 comment="initiate message for martial art '{}'".format(name))
     onhit_buffs = item.get("onhit_buffs", list())
     static_buffs = item.get("static_buffs", list())
     onmove_buffs = item.get("onmove_buffs", list())
@@ -341,6 +355,8 @@ def extract_gun(item):
     if "name" in item:
         item_name = item.get("name")
         if "name_plural" in item:
+            if type(item_name) is not str:
+                raise WrongJSONItem("ERROR: 'name_plural' found but 'name' is not a string", item)
             # legacy format
             if item["name_plural"] != "none":
                 writestr(outfile, item_name, item["name_plural"])
@@ -375,6 +391,8 @@ def extract_gunmod(item):
     if "name" in item:
         item_name = item.get("name")
         if "name_plural" in item:
+            if type(item_name) is not str:
+                raise WrongJSONItem("ERROR: 'name_plural' found but 'name' is not a string", item)
             # legacy format
             if item["name_plural"] != "none":
                 writestr(outfile, item_name, item["name_plural"])
@@ -464,7 +482,6 @@ def extract_mapgen(item):
                     if speckey == "signage":
                         writestr(outfile, specval, comment="Sign")
         elif objkey == "signs":
-            obj = objval
             for (k, v) in sorted(objval.items(), key=lambda x: x[0]):
                 sign = v.get("signage", None)
                 writestr(outfile, sign, comment="Sign")
@@ -534,8 +551,8 @@ dynamic_line_string_keys = {
     "u_can_stow_weapon", "npc_can_stow_weapon", "u_has_weapon", "npc_has_weapon",
     "u_driving", "npc_driving",
     "has_pickup_list", "is_by_radio", "has_reason",
-# yes/no strings for complex conditions
-    "yes", "no"
+# yes/no strings for complex conditions, 'and' list
+    "yes", "no", "and"
 }
 
 def extract_dynamic_line(line, outfile):
@@ -631,10 +648,14 @@ def extract_missiondef(item):
 def extract_mutation(item):
     outfile = get_outfile("mutation")
 
-    item_name = found = item.get("name")
+    item_name_or_id = found = item.get("name")
     if found is None:
-        raise WrongJSONItem("JSON item don't contain 'name' field", item)
-    writestr(outfile, found)
+        if "copy-from" in item:
+            item_name_or_id = item["id"]
+        else:
+            raise WrongJSONItem("JSON item don't contain 'name' field", item)
+    else:
+        writestr(outfile, found)
 
     simple_fields = [ "description" ]
 
@@ -642,7 +663,7 @@ def extract_mutation(item):
         found = item.get(f)
         # Need that check due format string argument
         if found is not None:
-            writestr(outfile, found, comment="Description for {}".format(item_name))
+            writestr(outfile, found, comment="Description for {}".format(item_name_or_id))
 
     if "attacks" in item:
         attacks = item.get("attacks")
@@ -744,6 +765,29 @@ def extract_skill_display_type(item):
     outfile = get_outfile("skill_display_type")
     writestr(outfile, item["display_string"], comment="display string for skill display type '{}'".format(item["ident"]))
 
+def extract_fault(item):
+    outfile = get_outfile("fault")
+    writestr(outfile, item["name"])
+    writestr(outfile, item["description"], comment="description for fault '{}'".format(item["name"]))
+    for method in item["mending_methods"]:
+        if "name" in method:
+            writestr(outfile, method["name"], comment="name of mending method for fault '{}'".format(item["name"]))
+        if "description" in method:
+            writestr(outfile, method["description"], comment="description for mending method '{}' of fault '{}'".format(method["name"], item["name"]))
+        if "success_msg" in method:
+            writestr(outfile, method["success_msg"], format_strings=True, comment="success message for mending method '{}' of fault '{}'".format(method["name"], item["name"]))
+
+def extract_snippets(item):
+    outfile = get_outfile("snippet")
+    text = item["text"];
+    if type(text) is not list:
+        text = [text];
+    for snip in text:
+        if type(snip) is str:
+            writestr(outfile, snip)
+        else:
+            writestr(outfile, snip["text"])
+
 # these objects need to have their strings specially extracted
 extract_specials = {
     "harvest" : extract_harvest,
@@ -751,6 +795,7 @@ extract_specials = {
     "clothing_mod": extract_clothing_mod,
     "construction": extract_construction,
     "effect_type": extract_effect_type,
+    "fault": extract_fault,
     "GUN": extract_gun,
     "GUNMOD": extract_gunmod,
     "mapgen": extract_mapgen,
@@ -765,14 +810,14 @@ extract_specials = {
     "recipe": extract_recipes,
     "recipe_group": extract_recipe_group,
     "scenario": extract_scenarios,
+    "snippet": extract_snippets,
     "talk_topic": extract_talk_topic,
     "trap": extract_trap,
     "gate": extract_gate,
     "vehicle_spawn": extract_vehspawn,
     "field_type": extract_field_type,
     "ter_furn_transform": extract_ter_furn_transform_messages,
-    "skill_display_type": extract_skill_display_type
-
+    "skill_display_type": extract_skill_display_type,
 }
 
 ##
@@ -850,9 +895,11 @@ def writestr(filename, string, plural=None, context=None, format_strings=False, 
                 # no "str_pl" entry in json, assuming regular plural form as in item_factory.cpp etc
                 str_pl = "{}s".format(string["str"])
         elif "str_pl" in string:
-            raise WrongJSONItem("ERROR: str_pl not supported here", string)
+            str_pl = string["str_pl"]
         writestr(filename, string["str"], str_pl, ctxt, format_strings, comment)
         return
+    elif type(string) is not str and plural is not None:
+        raise WrongJSONItem("ERROR: 'name_plural' found but 'name' is not a string", plural)
 
     # don't write empty strings
     if not string: return
@@ -931,7 +978,7 @@ def extract(item, infilename):
     """Find any extractable strings in the given json object,
     and write them to the appropriate file."""
     if not "type" in item:
-        raise WrongJSONItem("ERROR: Object doesn't have a type: {}".format(infilename), item)
+        return
     object_type = item["type"]
     found_types.add(object_type)
     outfile = get_outfile(object_type)
@@ -954,6 +1001,8 @@ def extract(item, infilename):
         return
     if name:
         if "name_plural" in item:
+            if type(name) is not str:
+                raise WrongJSONItem("ERROR: 'name_plural' found but 'name' is not a string", item)
             # legacy format
             if item["name_plural"] != "none":
                 writestr(outfile, name, item["name_plural"], **kwargs)
@@ -977,6 +1026,11 @@ def extract(item, infilename):
     if "use_action" in item:
         extract_use_action_msgs(outfile, item["use_action"], item.get("name"), kwargs)
         wrote = True
+    if "conditional_names" in item:
+        for cname in item["conditional_names"]:
+            c = "Conditional name for {} when {} matches {}".format(name, cname["type"], cname["condition"])
+            writestr(outfile, cname["name"], comment=c, format_strings=True, new_pl_fmt=True, **kwargs)
+            wrote = True
     if "description" in item:
         if name:
             c = "Description for {}".format(name)

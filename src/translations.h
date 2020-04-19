@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TRANSLATIONS_H
-#define TRANSLATIONS_H
+#ifndef CATA_SRC_TRANSLATIONS_H
+#define CATA_SRC_TRANSLATIONS_H
 
 #include <map>
 #include <ostream>
@@ -200,6 +200,11 @@ class translation
          */
         bool operator==( const translation &that ) const;
         bool operator!=( const translation &that ) const;
+
+        /**
+         * Only used for migrating old snippet hashes into snippet ids.
+         */
+        cata::optional<int> legacy_hash() const;
     private:
         translation( const std::string &ctxt, const std::string &raw );
         translation( const std::string &raw );
@@ -239,4 +244,4 @@ std::string operator+( const translation &lhs, const std::string &rhs );
 std::string operator+( const std::string &lhs, const translation &rhs );
 std::string operator+( const translation &lhs, const translation &rhs );
 
-#endif // _TRANSLATIONS_H_
+#endif // CATA_SRC_TRANSLATIONS_H

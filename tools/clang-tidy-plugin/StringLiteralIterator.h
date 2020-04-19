@@ -1,10 +1,19 @@
-#ifndef CATA_TOOLS_CLANG_TIDY_STRINGLITERALVIEW_H
-#define CATA_TOOLS_CLANG_TIDY_STRINGLITERALVIEW_H
+#ifndef CATA_TOOLS_CLANG_TIDY_PLUGIN_STRINGLITERALITERATOR_H
+#define CATA_TOOLS_CLANG_TIDY_PLUGIN_STRINGLITERALITERATOR_H
 
-#include "ClangTidy.h"
+#include <clang/Basic/SourceLocation.h>
+#include <clang/Basic/TargetInfo.h>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <iterator>
 
 namespace clang
 {
+class LangOptions;
+class SourceManager;
+class StringLiteral;
+
 namespace tidy
 {
 namespace cata
@@ -18,6 +27,12 @@ class StringLiteralIterator
         // This assumes that ind points to the start of a valid utf8 sequence
         StringLiteralIterator( const StringLiteral &str, size_t ind );
 
+        // Get the source location corresponding to the character pointed to
+        // by the iterator.
+        // Do note that clang crashes when the string literal is a predefined
+        // expression such as __func__, so you may want to exclude them using
+        // the matcher `unless( hasAncestor( predefinedExpr() ) )` or something
+        // to that effect.
         SourceLocation toSourceLocation( const SourceManager &SrcMgr, const LangOptions &LangOpts,
                                          const TargetInfo &Info ) const;
 
@@ -56,4 +71,18 @@ class StringLiteralIterator
 } // namespace tidy
 } // namespace clang
 
-#endif // CATA_TOOLS_CLANG_TIDY_STRINGLITERALVIEW_H
+namespace std
+{
+template<>
+struct iterator_traits<clang::tidy::cata::StringLiteralIterator> {
+    using difference_type = ptrdiff_t;
+    using value_type = uint32_t;
+    using pointer = const uint32_t *;
+    using reference = const uint32_t &;
+    // randome_access_iterator_tag requires constant increment/decrement time,
+    // which StringLiteralIterator doesn't satisfy.
+    using iterator_category = bidirectional_iterator_tag;
+};
+} // namespace std
+
+#endif // CATA_TOOLS_CLANG_TIDY_PLUGIN_STRINGLITERALITERATOR_H

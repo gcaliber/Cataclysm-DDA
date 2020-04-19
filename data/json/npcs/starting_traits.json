@@ -65,13 +65,12 @@
       { "trait": "SAVANT", "prob": 10 },
       { "trait": "SCHIZOPHRENIC", "prob": 1 },
       { "trait": "SQUEAMISH", "prob": 20 },
-      { "trait": "TRIGGERHAPPY", "prob": 10 },
       { "trait": "ANTIWHEAT", "prob": 5 },
       { "trait": "WOOLALLERGY", "prob": 5 }
     ]
   },
   {
-    "//": "This group picks out one of the exluding traits.",
+    "//": "This group picks out one of the excluding traits.",
     "type": "trait_group",
     "id": "trait_group_NONADDICTIVE",
     "subtype": "distribution",
@@ -187,7 +186,7 @@
     "type": "trait_group",
     "id": "trait_group_PSYCHOPATH",
     "subtype": "distribution",
-    "traits": [ { "trait": "PSYCHOPATH" }, { "trait": "PACIFIST" } ]
+    "traits": [ { "trait": "PSYCHOPATH" }, { "trait": "KILLER" }, { "trait": "PACIFIST" } ]
   },
   {
     "type": "trait_group",
@@ -211,7 +210,7 @@
     "type": "trait_group",
     "id": "trait_group_LIAR",
     "subtype": "distribution",
-    "//": "NOTE: These traits should be used as conditionals to affect the difficulty of NPCs lying about the expertises they know.",
+    "//": "NOTE: These traits should be used as conditionals to affect the difficulty of NPCs lying about the expertise they have.",
     "traits": [ { "trait": "LIAR" }, { "trait": "TRUTHTELLER" } ]
   },
   {

@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-#include <sstream>
 
 #include "cursesdef.h"
 #include "input.h"
 #include "output.h"
 #include "rng.h"
 #include "translations.h"
+#include "ui_manager.h"
 #include "catacharset.h"
 #include "color.h"
 #include "optional.h"
@@ -148,17 +148,18 @@ int lightson_game::start_game()
     }
 
     mvwputch( w_border, point( 2, 0 ), hilite( c_white ), _( "Lights on!" ) );
-    std::ostringstream str;
-    str << _( "<color_white>Game goal:</color> Switch all the lights on." ) << '\n' <<
-        _( "<color_white>Legend: #</color> on, <color_dark_gray>-</color> off." ) << '\n' <<
-        _( "Toggle lights switches selected light and 4 its neighbors." );
     fold_and_print( w_border, point( 2, w_height - 5 ), FULL_SCREEN_WIDTH - 4, c_light_gray,
-                    str.str() );
+                    "%s\n%s\n%s", _( "<color_white>Game goal:</color> Switch all the lights on." ),
+                    _( "<color_white>Legend: #</color> on, <color_dark_gray>-</color> off." ),
+                    _( "Toggle lights switches selected light and 4 its neighbors." ) );
 
     wrefresh( w_border );
 
     win = true;
     int hasWon = 0;
+
+    // FIXME: temporarily disable redrawing of lower UIs before this UI is migrated to `ui_adaptor`
+    ui_adaptor ui( ui_adaptor::disable_uis_below {} );
 
     do {
         if( win ) {

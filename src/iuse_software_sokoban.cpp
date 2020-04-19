@@ -1,6 +1,5 @@
 #include "iuse_software_sokoban.h"
 
-#include <sstream>
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -8,36 +7,29 @@
 
 #include "cata_utility.h"
 #include "catacharset.h"
+#include "color.h"
 #include "cursesdef.h"
 #include "input.h"
+#include "optional.h"
 #include "output.h"
 #include "path_info.h"
-#include "string_formatter.h"
-#include "translations.h"
-#include "color.h"
-#include "optional.h"
 #include "point.h"
+#include "translations.h"
+#include "ui_manager.h"
 
 sokoban_game::sokoban_game() = default;
 
 void sokoban_game::print_score( const catacurses::window &w_sokoban, int iScore, int iMoves )
 {
-    std::stringstream ssTemp;
-    ssTemp << string_format( _( "Level: %d/%d" ), iCurrentLevel + 1, iNumLevel ) << "    ";
-    mvwprintz( w_sokoban, point( 3, 1 ), c_white, ssTemp.str() );
+    mvwprintz( w_sokoban, point( 3, 1 ), c_white, _( "Level: %d/%d" ), iCurrentLevel + 1, iNumLevel );
+    wprintw( w_sokoban, "    " );
 
-    ssTemp.str( "" );
-    ssTemp << string_format( _( "Score: %d" ), iScore );
-    mvwprintz( w_sokoban, point( 3, 2 ), c_white, ssTemp.str() );
+    mvwprintz( w_sokoban, point( 3, 2 ), c_white, _( "Score: %d" ), iScore );
 
-    ssTemp.str( "" );
-    ssTemp << string_format( _( "Moves: %d" ), iMoves ) << "    ";
-    mvwprintz( w_sokoban, point( 3, 3 ), c_white, ssTemp.str() );
+    mvwprintz( w_sokoban, point( 3, 3 ), c_white, _( "Moves: %d" ), iMoves );
+    wprintw( w_sokoban, "    " );
 
-    ssTemp.str( "" );
-    ssTemp << string_format( _( "Total moves: %d" ), iTotalMoves );
-    mvwprintz( w_sokoban, point( 3, 4 ), c_white, ssTemp.str() );
-
+    mvwprintz( w_sokoban, point( 3, 4 ), c_white, _( "Total moves: %d" ), iTotalMoves );
 }
 
 void sokoban_game::parse_level( std::istream &fin )
@@ -242,7 +234,7 @@ int sokoban_game::start_game()
     const int iOffsetY = TERMY > FULL_SCREEN_HEIGHT ? ( TERMY - FULL_SCREEN_HEIGHT ) / 2 : 0;
 
     using namespace std::placeholders;
-    read_from_file( FILENAMES["sokoban"], std::bind( &sokoban_game::parse_level, this, _1 ) );
+    read_from_file( PATH_INFO::sokoban(), std::bind( &sokoban_game::parse_level, this, _1 ) );
 
     const catacurses::window w_sokoban = catacurses::newwin( FULL_SCREEN_HEIGHT, FULL_SCREEN_WIDTH,
                                          point( iOffsetX, iOffsetY ) );
@@ -276,6 +268,9 @@ int sokoban_game::start_game()
 
     int iPlayerY = 0;
     int iPlayerX = 0;
+
+    // FIXME: temporarily disable redrawing of lower UIs before this UI is migrated to `ui_adaptor`
+    ui_adaptor ui( ui_adaptor::disable_uis_below {} );
 
     bool bNewLevel = true;
     bool bMoved = false;

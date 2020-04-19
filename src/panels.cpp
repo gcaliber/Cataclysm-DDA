@@ -1,56 +1,58 @@
 #include "panels.h"
 
-#include <cstdlib>
-#include <cmath>
-#include <string>
 #include <array>
+#include <cmath>
+#include <cstdlib>
 #include <iosfwd>
 #include <iterator>
 #include <list>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "action.h"
 #include "avatar.h"
 #include "behavior.h"
 #include "behavior_oracle.h"
+#include "bodypart.h"
+#include "calendar.h"
 #include "cata_utility.h"
+#include "catacharset.h"
+#include "character.h"
+#include "character_martial_arts.h"
 #include "color.h"
+#include "compatibility.h"
 #include "cursesdef.h"
+#include "debug.h"
 #include "effect.h"
 #include "game.h"
+#include "game_constants.h"
 #include "game_ui.h"
 #include "input.h"
 #include "item.h"
 #include "json.h"
+#include "magic.h"
 #include "map.h"
-#include "martialarts.h"
-#include "options.h"
 #include "messages.h"
+#include "omdata.h"
+#include "options.h"
+#include "output.h"
 #include "overmap.h"
 #include "overmapbuffer.h"
-#include "output.h"
 #include "path_info.h"
 #include "player.h"
+#include "pldata.h"
+#include "point.h"
+#include "string_formatter.h"
+#include "string_id.h"
+#include "tileray.h"
 #include "translations.h"
+#include "type_id.h"
+#include "ui_manager.h"
+#include "units.h"
 #include "vehicle.h"
 #include "vpart_position.h"
 #include "weather.h"
-#include "bodypart.h"
-#include "calendar.h"
-#include "catacharset.h"
-#include "compatibility.h"
-#include "debug.h"
-#include "game_constants.h"
-#include "int_id.h"
-#include "omdata.h"
-#include "pldata.h"
-#include "string_formatter.h"
-#include "tileray.h"
-#include "type_id.h"
-#include "magic.h"
-#include "point.h"
-#include "string_id.h"
 
 static const trait_id trait_NOPAIN( "NOPAIN" );
 static const trait_id trait_SELFAWARE( "SELFAWARE" );
@@ -58,7 +60,7 @@ static const trait_id trait_THRESH_FELINE( "THRESH_FELINE" );
 static const trait_id trait_THRESH_BIRD( "THRESH_BIRD" );
 static const trait_id trait_THRESH_URSINE( "THRESH_URSINE" );
 
-const efftype_id effect_got_checked( "got_checked" );
+static const efftype_id effect_got_checked( "got_checked" );
 
 // constructor
 window_panel::window_panel( std::function<void( avatar &, const catacurses::window & )>
@@ -205,15 +207,15 @@ std::string window_panel::get_name() const
 }
 
 void overmap_ui::draw_overmap_chunk( const catacurses::window &w_minimap, const avatar &you,
-                                     const tripoint &global_omt, const int start_y_input, const int start_x_input, const int width,
-                                     const int height )
+                                     const tripoint &global_omt, const point &start_input,
+                                     const int width, const int height )
 {
     const int cursx = global_omt.x;
     const int cursy = global_omt.y;
     const tripoint targ = you.get_active_mission_target();
     bool drew_mission = targ == overmap::invalid_tripoint;
-    const int start_y = start_y_input + ( height / 2 ) - 2;
-    const int start_x = start_x_input + ( width / 2 ) - 2;
+    const int start_y = start_input.y + ( height / 2 ) - 2;
+    const int start_x = start_input.x + ( width / 2 ) - 2;
 
     for( int i = -( width / 2 ); i <= width - ( width / 2 ) - 1; i++ ) {
         for( int j = -( height / 2 ); j <= height - ( height / 2 ) - 1; j++ ) {
@@ -408,7 +410,7 @@ void overmap_ui::draw_overmap_chunk( const catacurses::window &w_minimap, const 
 static void draw_minimap( const avatar &u, const catacurses::window &w_minimap )
 {
     const tripoint curs = u.global_omt_location();
-    overmap_ui::draw_overmap_chunk( w_minimap, u, curs, 0, 0, 5, 5 );
+    overmap_ui::draw_overmap_chunk( w_minimap, u, curs, point_zero, 5, 5 );
 }
 
 static void decorate_panel( const std::string &name, const catacurses::window &w )
@@ -434,7 +436,7 @@ static std::string get_temp( const avatar &u )
         u.has_bionic( bionic_id( "bio_meteorologist" ) ) ) {
         temp = print_temperature( g->weather.get_temperature( u.pos() ) );
     }
-    if( static_cast<int>( temp.size() ) == 0 ) {
+    if( temp.empty() ) {
         return "-";
     }
     return temp;
@@ -541,10 +543,12 @@ static std::pair<int, int> temp_delta( const avatar &u )
     int current_bp_extreme = 0;
     int conv_bp_extreme = 0;
     for( int i = 0; i < num_bp; i++ ) {
-        if( abs( u.temp_cur[i] - BODYTEMP_NORM ) > abs( u.temp_cur[current_bp_extreme] - BODYTEMP_NORM ) ) {
+        if( std::abs( u.temp_cur[i] - BODYTEMP_NORM ) >
+            std::abs( u.temp_cur[current_bp_extreme] - BODYTEMP_NORM ) ) {
             current_bp_extreme = i;
         }
-        if( abs( u.temp_conv[i] - BODYTEMP_NORM ) > abs( u.temp_conv[conv_bp_extreme] - BODYTEMP_NORM ) ) {
+        if( std::abs( u.temp_conv[i] - BODYTEMP_NORM ) >
+            std::abs( u.temp_conv[conv_bp_extreme] - BODYTEMP_NORM ) ) {
             conv_bp_extreme = i;
         }
     }
@@ -790,8 +794,17 @@ static std::pair<nc_color, std::string> power_stat( const avatar &u )
         } else if( u.get_power_level() >= u.get_max_power_level() / 4 ) {
             c_pwr = c_red;
         }
-        s_pwr = to_string( units::to_kilojoule( u.get_power_level() ) ) +
-                pgettext( "energy unit: kilojoule", "kJ" );
+
+        if( u.get_power_level() < 1_J ) {
+            s_pwr = to_string( units::to_millijoule( u.get_power_level() ) ) +
+                    pgettext( "energy unit: millijoule", "mJ" );
+        } else if( u.get_power_level() < 1_kJ ) {
+            s_pwr = to_string( units::to_joule( u.get_power_level() ) ) +
+                    pgettext( "energy unit: joule", "J" );
+        } else {
+            s_pwr = to_string( units::to_kilojoule( u.get_power_level() ) ) +
+                    pgettext( "energy unit: kilojoule", "kJ" );
+        }
     }
     return std::make_pair( c_pwr, s_pwr );
 }
@@ -835,7 +848,7 @@ static nc_color safe_color()
 
 static int get_int_digits( const int &digits )
 {
-    int temp = abs( digits );
+    int temp = std::abs( digits );
     if( digits > 0 ) {
         return static_cast<int>( log10( static_cast<double>( temp ) ) ) + 1;
     } else if( digits < 0 ) {
@@ -902,7 +915,7 @@ static void draw_limb_health( avatar &u, const catacurses::window &w, int limb_i
         wprintz( w, hp.second, hp.first );
 
         //Add the trailing symbols for a not-quite-full health bar
-        print_symbol_num( w, 5 - static_cast<int>( hp.first.size() ), ".", c_white );
+        print_symbol_num( w, 5 - utf8_width( hp.first ), ".", c_white );
     }
 }
 
@@ -945,13 +958,13 @@ static void draw_limb2( avatar &u, const catacurses::window &w )
     mvwprintz( w, point( 27, 2 ), morale_pair.first, smiley );
 
     // print stamina
-    const auto &stamina = get_hp_bar( u.stamina, u.get_stamina_max() );
+    const auto &stamina = get_hp_bar( u.get_stamina(), u.get_stamina_max() );
     mvwprintz( w, point( 22, 0 ), c_light_gray, _( "STM" ) );
     mvwprintz( w, point( 26, 0 ), stamina.second, stamina.first );
 
     mvwprintz( w, point( 22, 1 ), c_light_gray, _( "PWR" ) );
     const auto pwr = power_stat( u );
-    mvwprintz( w, point( 31 - pwr.second.length(), 1 ), pwr.first, pwr.second );
+    mvwprintz( w, point( 31 - utf8_width( pwr.second ), 1 ), pwr.first, pwr.second );
 
     wrefresh( w );
 }
@@ -1011,13 +1024,13 @@ static void draw_stealth( avatar &u, const catacurses::window &w )
     mvwprintz( w, point( 7, 0 ), value_color( u.get_speed() ), "%s", u.get_speed() );
     nc_color move_color = move_mode_color( u );
     std::string move_string = to_string( u.movecounter ) + move_mode_string( u );
-    mvwprintz( w, point( 15 - move_string.length(), 0 ), move_color, move_string );
+    mvwprintz( w, point( 15 - utf8_width( move_string ), 0 ), move_color, move_string );
     if( u.is_deaf() ) {
         mvwprintz( w, point( 22, 0 ), c_red, _( "DEAF" ) );
     } else {
         mvwprintz( w, point( 20, 0 ), c_light_gray, _( "Sound:" ) );
         const std::string snd = to_string( u.volume );
-        mvwprintz( w, point( 30 - snd.length(), 0 ), u.volume != 0 ? c_yellow : c_light_gray, snd );
+        mvwprintz( w, point( 30 - utf8_width( snd ), 0 ), u.volume != 0 ? c_yellow : c_light_gray, snd );
     }
 
     wrefresh( w );
@@ -1073,7 +1086,7 @@ static void draw_time( const avatar &u, const catacurses::window &w )
     // display date
     mvwprintz( w, point_zero, c_light_gray, calendar::name_season( season_of_year( calendar::turn ) ) );
     std::string day = to_string( day_of_season<int>( calendar::turn ) + 1 );
-    mvwprintz( w, point( 10 - day.length(), 0 ), c_light_gray, day );
+    mvwprintz( w, point( 10 - utf8_width( day ), 0 ), c_light_gray, day );
     // display time
     if( u.has_watch() ) {
         mvwprintz( w, point( 11, 0 ), c_light_gray, to_string_time_of_day( calendar::turn ) );
@@ -1081,6 +1094,7 @@ static void draw_time( const avatar &u, const catacurses::window &w )
         wmove( w, point( 11, 0 ) );
         draw_time_graphic( w );
     } else {
+        // NOLINTNEXTLINE(cata-text-style): the question mark does not end a sentence
         mvwprintz( w, point( 11, 0 ), c_light_gray, _( "Time: ???" ) );
     }
     //display moon
@@ -1153,9 +1167,7 @@ static void draw_limb_narrow( avatar &u, const catacurses::window &w )
 
         std::string str = body_part_hp_bar_ui_text( part[i] );
         wmove( w, point( nx, ny ) );
-        while( str.length() < 5 ) {
-            str = str + " ";
-        }
+        str = left_justify( str, 5 );
         wprintz( w, u.limb_color( part[i], true, true, true ), str + ":" );
     }
     wrefresh( w );
@@ -1176,7 +1188,8 @@ static void draw_limb_wide( avatar &u, const catacurses::window &w )
         int offset = i * 15;
         int ny = offset / 45;
         int nx = offset % 45;
-        std::string str = string_format( " %-5s: ", body_part_hp_bar_ui_text( parts[i].first ) );
+        std::string str = string_format( " %s: ",
+                                         left_justify( body_part_hp_bar_ui_text( parts[i].first ), 5 ) );
         nc_color part_color = u.limb_color( parts[i].first, true, true, true );
         print_colored_text( w, point( nx, ny ), part_color, c_white, str );
         draw_limb_health( u, w, parts[i].second );
@@ -1205,10 +1218,11 @@ static void draw_char_narrow( avatar &u, const catacurses::window &w )
     mvwprintz( w, point( 8, 0 ), c_light_gray, "%s", u.volume );
 
     // print stamina
-    auto needs_pair = std::make_pair( get_hp_bar( u.stamina, u.get_stamina_max() ).second,
-                                      get_hp_bar( u.stamina, u.get_stamina_max() ).first );
+    auto needs_pair = std::make_pair( get_hp_bar( u.get_stamina(), u.get_stamina_max() ).second,
+                                      get_hp_bar( u.get_stamina(), u.get_stamina_max() ).first );
     mvwprintz( w, point( 8, 1 ), needs_pair.first, needs_pair.second );
-    for( size_t i = 0; i < 5 - needs_pair.second.length(); i++ ) {
+    const int width = utf8_width( needs_pair.second );
+    for( int i = 0; i < 5 - width; i++ ) {
         mvwprintz( w, point( 12 - i, 1 ), c_white, "." );
     }
 
@@ -1248,10 +1262,11 @@ static void draw_char_wide( avatar &u, const catacurses::window &w )
     mvwprintz( w, point( 38, 0 ), focus_color( u.focus_pool ), "%s", u.focus_pool );
 
     // print stamina
-    auto needs_pair = std::make_pair( get_hp_bar( u.stamina, u.get_stamina_max() ).second,
-                                      get_hp_bar( u.stamina, u.get_stamina_max() ).first );
+    auto needs_pair = std::make_pair( get_hp_bar( u.get_stamina(), u.get_stamina_max() ).second,
+                                      get_hp_bar( u.get_stamina(), u.get_stamina_max() ).first );
     mvwprintz( w, point( 8, 1 ), needs_pair.first, needs_pair.second );
-    for( size_t i = 0; i < 5 - needs_pair.second.length(); i++ ) {
+    const int width = utf8_width( needs_pair.second );
+    for( int i = 0; i < 5 - width; i++ ) {
         mvwprintz( w, point( 12 - i, 1 ), c_white, "." );
     }
 
@@ -1349,12 +1364,13 @@ static void draw_loc_labels( const avatar &u, const catacurses::window &w, bool 
     } else if( g->get_levz() >= 0 ) {
         mvwprintz( w, point( 1, 4 ), c_light_gray, _( "Time : %s" ), time_approx() );
     } else {
+        // NOLINTNEXTLINE(cata-text-style): the question mark does not end a sentence
         mvwprintz( w, point( 1, 4 ), c_light_gray, _( "Time : ???" ) );
     }
     if( minimap ) {
         const int offset = getmaxx( w ) - 6;
         const tripoint curs = u.global_omt_location();
-        overmap_ui::draw_overmap_chunk( w, u, curs, -1, offset, 5, 5 );
+        overmap_ui::draw_overmap_chunk( w, u, curs, point( offset, -1 ), 5, 5 );
     }
     wrefresh( w );
 }
@@ -1402,7 +1418,7 @@ static void draw_weapon_labels( const avatar &u, const catacurses::window &w )
     // NOLINTNEXTLINE(cata-use-named-point-constants)
     mvwprintz( w, point( 1, 1 ), c_light_gray, _( "Style:" ) );
     print_colored_text( w, point( 8, 0 ), color, c_light_gray, u.weapname( getmaxx( w ) - 8 ) );
-    mvwprintz( w, point( 8, 1 ), c_light_gray, "%s", u.get_combat_style().name.translated() );
+    mvwprintz( w, point( 8, 1 ), c_light_gray, "%s", u.martial_arts_data.selected_style_name( u ) );
     wrefresh( w );
 }
 
@@ -1415,9 +1431,9 @@ static void draw_needs_narrow( const avatar &u, const catacurses::window &w )
     std::pair<nc_color, std::string> temp_pair = temp_stat( u );
     std::pair<std::string, nc_color> pain_pair = u.get_pain_description();
     // NOLINTNEXTLINE(cata-use-named-point-constants)
-    mvwprintz( w, point( 1, 0 ), c_light_gray, _( "Food :" ) );
+    mvwprintz( w, point( 1, 0 ), c_light_gray, _( "Hunger:" ) );
     // NOLINTNEXTLINE(cata-use-named-point-constants)
-    mvwprintz( w, point( 1, 1 ), c_light_gray, _( "Drink:" ) );
+    mvwprintz( w, point( 1, 1 ), c_light_gray, _( "Thirst:" ) );
     mvwprintz( w, point( 1, 2 ), c_light_gray, _( "Rest :" ) );
     mvwprintz( w, point( 1, 3 ), c_light_gray, _( "Pain :" ) );
     mvwprintz( w, point( 1, 4 ), c_light_gray, _( "Heat :" ) );
@@ -1440,16 +1456,42 @@ static void draw_needs_labels( const avatar &u, const catacurses::window &w )
     // NOLINTNEXTLINE(cata-use-named-point-constants)
     mvwprintz( w, point( 1, 0 ), c_light_gray, _( "Pain :" ) );
     mvwprintz( w, point( 8, 0 ), pain_pair.second, pain_pair.first );
-    mvwprintz( w, point( 23, 0 ), c_light_gray, _( "Drink:" ) );
+    mvwprintz( w, point( 23, 0 ), c_light_gray, _( "Thirst:" ) );
     mvwprintz( w, point( 30, 0 ), thirst_pair.second, thirst_pair.first );
 
     // NOLINTNEXTLINE(cata-use-named-point-constants)
     mvwprintz( w, point( 1, 1 ), c_light_gray, _( "Rest :" ) );
     mvwprintz( w, point( 8, 1 ), rest_pair.second, rest_pair.first );
-    mvwprintz( w, point( 23, 1 ), c_light_gray, _( "Food :" ) );
+    mvwprintz( w, point( 23, 1 ), c_light_gray, _( "Hunger:" ) );
     mvwprintz( w, point( 30, 1 ), hunger_pair.second, hunger_pair.first );
     mvwprintz( w, point( 1, 2 ), c_light_gray, _( "Heat :" ) );
     mvwprintz( w, point( 8, 2 ), temp_pair.first, temp_pair.second );
+    wrefresh( w );
+}
+
+static void draw_sound_labels( const avatar &u, const catacurses::window &w )
+{
+    werase( w );
+    // NOLINTNEXTLINE(cata-use-named-point-constants)
+    mvwprintz( w, point( 1, 0 ), c_light_gray, _( "Sound:" ) );
+    if( !u.is_deaf() ) {
+        mvwprintz( w, point( 8, 0 ), c_yellow, to_string( u.volume ) );
+    } else {
+        mvwprintz( w, point( 8, 0 ), c_red, _( "Deaf!" ) );
+    }
+    wrefresh( w );
+}
+
+static void draw_sound_narrow( const avatar &u, const catacurses::window &w )
+{
+    werase( w );
+    // NOLINTNEXTLINE(cata-use-named-point-constants)
+    mvwprintz( w, point( 1, 0 ), c_light_gray, _( "Sound:" ) );
+    if( !u.is_deaf() ) {
+        mvwprintz( w, point( 8, 0 ), c_yellow, to_string( u.volume ) );
+    } else {
+        mvwprintz( w, point( 8, 0 ), c_red, _( "Deaf!" ) );
+    }
     wrefresh( w );
 }
 
@@ -1462,7 +1504,7 @@ static void draw_env_compact( avatar &u, const catacurses::window &w )
     nc_color color = c_light_gray;
     print_colored_text( w, point( 8, 0 ), color, c_light_gray, u.weapname( getmaxx( w ) - 8 ) );
     // style
-    mvwprintz( w, point( 8, 1 ), c_light_gray, "%s", u.get_combat_style().name.translated() );
+    mvwprintz( w, point( 8, 1 ), c_light_gray, "%s", u.martial_arts_data.selected_style_name( u ) );
     // location
     mvwprintz( w, point( 8, 2 ), c_white, utf8_truncate( overmap_buffer.ter(
                    u.global_omt_location() )->get_name(), getmaxx( w ) - 8 ) );
@@ -1491,10 +1533,12 @@ static void draw_env_compact( avatar &u, const catacurses::window &w )
     wrefresh( w );
 }
 
-static void render_wind( avatar &u, const catacurses::window &w, std::string formatstr )
+static void render_wind( avatar &u, const catacurses::window &w, const std::string &formatstr )
 {
     werase( w );
-    mvwprintz( w, point_zero, c_light_gray, string_format( formatstr, _( "Wind" ) ) );
+    mvwprintz( w, point_zero, c_light_gray,
+               //~ translation should not exceed 5 console cells
+               string_format( formatstr, left_justify( _( "Wind" ), 5 ) ) );
     const oter_id &cur_om_ter = overmap_buffer.ter( u.global_omt_location() );
     double windpower = get_local_windpower( g->weather.windspeed, cur_om_ter,
                                             u.pos(), g->weather.winddirection, g->is_sheltered( u.pos() ) );
@@ -1505,12 +1549,12 @@ static void render_wind( avatar &u, const catacurses::window &w, std::string for
 
 static void draw_wind( avatar &u, const catacurses::window &w )
 {
-    render_wind( u, w, "%-5s: " );
+    render_wind( u, w, "%s: " );
 }
 
 static void draw_wind_padding( avatar &u, const catacurses::window &w )
 {
-    render_wind( u, w, " %-5s: " );
+    render_wind( u, w, " %s: " );
 }
 
 static void draw_health_classic( avatar &u, const catacurses::window &w )
@@ -1577,16 +1621,17 @@ static void draw_health_classic( avatar &u, const catacurses::window &w )
     mvwprintz( w, point( 40, 4 ), safe_color(), safe_str );
 
     // print stamina
-    auto pair = std::make_pair( get_hp_bar( u.stamina, u.get_stamina_max() ).second,
-                                get_hp_bar( u.stamina, u.get_stamina_max() ).first );
+    auto pair = std::make_pair( get_hp_bar( u.get_stamina(), u.get_stamina_max() ).second,
+                                get_hp_bar( u.get_stamina(), u.get_stamina_max() ).first );
     mvwprintz( w, point( 35, 5 ), c_light_gray, _( "Stm" ) );
     mvwprintz( w, point( 39, 5 ), pair.first, pair.second );
-    for( size_t i = 0; i < 5 - pair.second.length(); i++ ) {
+    const int width = utf8_width( pair.second );
+    for( int i = 0; i < 5 - width; i++ ) {
         mvwprintz( w, point( 43 - i, 5 ), c_white, "." );
     }
 
     // speed
-    if( !u.in_vehicle ) {
+    if( !veh ) {
         mvwprintz( w, point( 21, 5 ), u.get_speed() < 100 ? c_red : c_white,
                    _( "Spd " ) + to_string( u.get_speed() ) );
         nc_color move_color = u.movement_mode_is( CMM_WALK ) ? c_white : move_mode_color( u );
@@ -1605,7 +1650,7 @@ static void draw_health_classic( avatar &u, const catacurses::window &w )
 
     // vehicle display
     if( veh ) {
-        veh->print_fuel_indicators( w, 2, 39 );
+        veh->print_fuel_indicators( w, point( 39, 2 ) );
         mvwprintz( w, point( 35, 4 ), c_light_gray, to_string( ( veh->face.dir() + 90 ) % 360 ) + "°" );
         // target speed > current speed
         const float strain = veh->strain();
@@ -1719,7 +1764,7 @@ static void draw_veh_compact( const avatar &u, const catacurses::window &w )
         veh = veh_pointer_or_null( g->m.veh_at( u.pos() ) );
     }
     if( veh ) {
-        veh->print_fuel_indicators( w, 0, 0 );
+        veh->print_fuel_indicators( w, point_zero );
         mvwprintz( w, point( 6, 0 ), c_light_gray, to_string( ( veh->face.dir() + 90 ) % 360 ) + "°" );
         // target speed > current speed
         const float strain = veh->strain();
@@ -1751,7 +1796,7 @@ static void draw_veh_padding( const avatar &u, const catacurses::window &w )
         veh = veh_pointer_or_null( g->m.veh_at( u.pos() ) );
     }
     if( veh ) {
-        veh->print_fuel_indicators( w, 0, 1 );
+        veh->print_fuel_indicators( w, point_east );
         mvwprintz( w, point( 7, 0 ), c_light_gray, to_string( ( veh->face.dir() + 90 ) % 360 ) + "°" );
         // target speed > current speed
         const float strain = veh->strain();
@@ -1841,17 +1886,7 @@ static void draw_weapon_classic( const avatar &u, const catacurses::window &w )
     print_colored_text( w, point( 10, 0 ), color, color, u.weapname( getmaxx( w ) - 24 ) );
 
     // Print in sidebar currently used martial style.
-    std::string style;
-    const auto &cur_style = u.style_selected.obj();
-    if( !u.weapon.is_gun() ) {
-        if( cur_style.force_unarmed || cur_style.weapon_valid( u.weapon ) ) {
-            style = cur_style.name.translated();
-        } else if( u.is_armed() ) {
-            style = _( "Normal" );
-        } else {
-            style = _( "No Style" );
-        }
-    }
+    const std::string style = u.martial_arts_data.selected_style_name( u );
 
     if( !style.empty() ) {
         const auto style_color = u.is_armed() ? c_red : c_blue;
@@ -1877,6 +1912,7 @@ static void draw_time_classic( const avatar &u, const catacurses::window &w )
         wmove( w, point( 15, 0 ) );
         draw_time_graphic( w );
     } else {
+        // NOLINTNEXTLINE(cata-text-style): the question mark does not end a sentence
         mvwprintz( w, point( 15, 0 ), c_light_gray, _( "Time: ???" ) );
     }
 
@@ -1899,38 +1935,43 @@ static void draw_hint( const avatar &, const catacurses::window &w )
     wrefresh( w );
 }
 
-static void print_mana( const player &u, const catacurses::window &w, std::string fmt_string )
+static void print_mana( const player &u, const catacurses::window &w, const std::string &fmt_string,
+                        const int j1, const int j2, const int j3, const int j4 )
 {
     werase( w );
 
     auto mana_pair = mana_stat( u );
-    const std::string mana_string = string_format( fmt_string, _( "Mana" ),
-                                    colorize( mana_pair.second, mana_pair.first ), _( "Max Mana" ),
-                                    colorize( to_string( u.magic.max_mana( u ) ), c_light_blue ) );
+    const std::string mana_string = string_format( fmt_string,
+                                    //~ translation should not exceed 4 console cells
+                                    utf8_justify( _( "Mana" ), j1 ),
+                                    colorize( utf8_justify( mana_pair.second, j2 ), mana_pair.first ),
+                                    //~ translation should not exceed 9 console cells
+                                    utf8_justify( _( "Max Mana" ), j3 ),
+                                    colorize( utf8_justify( to_string( u.magic.max_mana( u ) ), j4 ), c_light_blue ) );
     nc_color gray = c_light_gray;
-    print_colored_text( w, point( getmaxx( w ) - mana_string.size(), 0 ), gray, gray, mana_string );
+    print_colored_text( w, point_zero, gray, gray, mana_string );
 
     wrefresh( w );
 }
 
 static void draw_mana_classic( const player &u, const catacurses::window &w )
 {
-    print_mana( u, w, "%-8s: %-5s %22s: %-5s" );
+    print_mana( u, w, "%s: %s %s: %s", -8, -5, 20, -5 );
 }
 
 static void draw_mana_compact( const player &u, const catacurses::window &w )
 {
-    print_mana( u, w, "%4s %-5s %12s %-5s" );
+    print_mana( u, w, "%s %s %s %s", 4, -5, 12, -5 );
 }
 
 static void draw_mana_narrow( const player &u, const catacurses::window &w )
 {
-    print_mana( u, w, " %-5s: %-5s %11s : %-5s" );
+    print_mana( u, w, " %s: %s %s : %s", -5, -5, 9, -5 );
 }
 
 static void draw_mana_wide( const player &u, const catacurses::window &w )
 {
-    print_mana( u, w, " %-5s: %-5s %15s : %-5s" );
+    print_mana( u, w, " %s: %s %s : %s", -5, -5, 13, -5 );
 }
 
 // ============
@@ -2015,6 +2056,7 @@ static std::vector<window_panel> initialize_default_label_narrow_panels()
     ret.emplace_back( window_panel( draw_wind_padding, translate_marker( "Wind" ), 1, 32, false ) );
     ret.emplace_back( window_panel( draw_weapon_labels, translate_marker( "Weapon" ), 2, 32, true ) );
     ret.emplace_back( window_panel( draw_needs_narrow, translate_marker( "Needs" ), 5, 32, true ) );
+    ret.emplace_back( window_panel( draw_sound_narrow, translate_marker( "Sound" ), 1, 32, true ) );
     ret.emplace_back( window_panel( draw_messages, translate_marker( "Log" ), -2, 32, true ) );
     ret.emplace_back( window_panel( draw_moon_narrow, translate_marker( "Moon" ), 2, 32, false ) );
     ret.emplace_back( window_panel( draw_armor_padding, translate_marker( "Armor" ), 5, 32, false ) );
@@ -2045,6 +2087,7 @@ static std::vector<window_panel> initialize_default_label_panels()
     ret.emplace_back( window_panel( draw_loc_wide, translate_marker( "Location Alt" ), 5, 44, false ) );
     ret.emplace_back( window_panel( draw_weapon_labels, translate_marker( "Weapon" ), 2, 44, true ) );
     ret.emplace_back( window_panel( draw_needs_labels, translate_marker( "Needs" ), 3, 44, true ) );
+    ret.emplace_back( window_panel( draw_sound_labels, translate_marker( "Sound" ), 1, 44, true ) );
     ret.emplace_back( window_panel( draw_messages, translate_marker( "Log" ), -2, 44, true ) );
     ret.emplace_back( window_panel( draw_moon_wide, translate_marker( "Moon" ), 1, 44, false ) );
     ret.emplace_back( window_panel( draw_armor_padding, translate_marker( "Armor" ), 5, 44, false ) );
@@ -2124,7 +2167,7 @@ void panel_manager::update_offsets( int x )
 
 bool panel_manager::save()
 {
-    return write_to_file( FILENAMES["panel_options"], [&]( std::ostream & fout ) {
+    return write_to_file( PATH_INFO::panel_options(), [&]( std::ostream & fout ) {
         JsonOut jout( fout, true );
         serialize( jout );
     }, _( "panel options" ) );
@@ -2132,7 +2175,7 @@ bool panel_manager::save()
 
 bool panel_manager::load()
 {
-    return read_from_file_optional_json( FILENAMES["panel_options"], [&]( JsonIn & jsin ) {
+    return read_from_file_optional_json( PATH_INFO::panel_options(), [&]( JsonIn & jsin ) {
         deserialize( jsin );
     } );
 }
@@ -2180,21 +2223,15 @@ void panel_manager::deserialize( JsonIn &jsin )
     JsonObject joLayouts( jsin.get_object() );
 
     current_layout_id = joLayouts.get_string( "current_layout_id" );
-    JsonArray jaLayouts = joLayouts.get_array( "layouts" );
-
-    while( jaLayouts.has_more() ) {
-        JsonObject joLayout = jaLayouts.next_object();
-
+    for( JsonObject joLayout : joLayouts.get_array( "layouts" ) ) {
         std::string layout_id = joLayout.get_string( "layout_id" );
         auto &layout = layouts.find( layout_id )->second;
         auto it = layout.begin();
 
-        JsonArray jaPanels = joLayout.get_array( "panels" );
-
-        while( jaPanels.has_more() ) {
-            JsonObject joPanel = jaPanels.next_object();
-
+        for( JsonObject joPanel : joLayout.get_array( "panels" ) ) {
             std::string name = joPanel.get_string( "name" );
+            bool toggle = joPanel.get_bool( "toggle" );
+
             for( auto it2 = layout.begin() + std::distance( layout.begin(), it ); it2 != layout.end(); ++it2 ) {
                 if( it2->get_name() == name ) {
                     if( it->get_name() != name ) {
@@ -2202,7 +2239,7 @@ void panel_manager::deserialize( JsonIn &jsin )
                         layout.erase( it2 );
                         it = layout.insert( it, panel );
                     }
-                    it->toggle = joPanel.get_bool( "toggle" );
+                    it->toggle = toggle;
                     ++it;
                     break;
                 }
@@ -2224,6 +2261,9 @@ void panel_manager::draw_adm( const catacurses::window &w, size_t column, size_t
     ctxt.register_action( "RIGHT" );
     ctxt.register_action( "MOVE_PANEL" );
     ctxt.register_action( "TOGGLE_PANEL" );
+
+    // FIXME: temporarily disable redrawing of lower UIs before this UI is migrated to `ui_adaptor`
+    ui_adaptor ui( ui_adaptor::disable_uis_below {} );
 
     const std::vector<int> column_widths = { 17, 37, 17 };
     size_t max_index = 0;
@@ -2309,13 +2349,13 @@ void panel_manager::draw_adm( const catacurses::window &w, size_t column, size_t
 
             col_offset = column_widths[0] + 2;
             int col_width = column_widths[1] - 4;
-            mvwprintz( w, point( col_offset, 1 ), c_light_green, trunc_ellipse( ctxt.press_x( "TOGGLE_PANEL" ),
+            mvwprintz( w, point( col_offset, 1 ), c_light_green, trunc_ellipse( ctxt.get_desc( "TOGGLE_PANEL" ),
                        col_width ) + ":" );
             mvwprintz( w, point( col_offset, 2 ), c_white, _( "Toggle panels on/off" ) );
-            mvwprintz( w, point( col_offset, 3 ), c_light_green, trunc_ellipse( ctxt.press_x( "MOVE_PANEL" ),
+            mvwprintz( w, point( col_offset, 3 ), c_light_green, trunc_ellipse( ctxt.get_desc( "MOVE_PANEL" ),
                        col_width ) + ":" );
             mvwprintz( w, point( col_offset, 4 ), c_white, _( "Change display order" ) );
-            mvwprintz( w, point( col_offset, 5 ), c_light_green, trunc_ellipse( ctxt.press_x( "QUIT" ),
+            mvwprintz( w, point( col_offset, 5 ), c_light_green, trunc_ellipse( ctxt.get_desc( "QUIT" ),
                        col_width ) + ":" );
             mvwprintz( w, point( col_offset, 6 ), c_white, _( "Exit" ) );
         }

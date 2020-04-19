@@ -1,6 +1,6 @@
 #pragma once
-#ifndef ENUMS_H
-#define ENUMS_H
+#ifndef CATA_SRC_ENUMS_H
+#define CATA_SRC_ENUMS_H
 
 template<typename T> struct enum_traits;
 
@@ -9,6 +9,22 @@ constexpr inline int sgn( const T x )
 {
     return x < 0 ? -1 : ( x > 0 ? 1 : 0 );
 }
+
+enum class holiday : int {
+    none = 0,
+    new_year,
+    easter,
+    independence_day,
+    halloween,
+    thanksgiving,
+    christmas,
+    num_holiday
+};
+
+template<>
+struct enum_traits<holiday> {
+    static constexpr holiday last = holiday::num_holiday;
+};
 
 enum temperature_flag : int {
     TEMP_NORMAL = 0,
@@ -212,7 +228,8 @@ enum class distraction_type {
     noise,
     pain,
     attacked,
-    hostile_spotted,
+    hostile_spotted_far,
+    hostile_spotted_near,
     talked_to,
     asthma,
     motion_alarm,
@@ -236,6 +253,12 @@ enum game_message_type : int {
     m_headshot,
     m_critical,
     m_grazing,
+    num_game_message_type
+};
+
+template<>
+struct enum_traits<game_message_type> {
+    static constexpr game_message_type last = game_message_type::num_game_message_type;
 };
 
 enum game_message_flags {
@@ -259,4 +282,4 @@ struct game_message_params {
     game_message_flags flags;
 };
 
-#endif
+#endif // CATA_SRC_ENUMS_H
